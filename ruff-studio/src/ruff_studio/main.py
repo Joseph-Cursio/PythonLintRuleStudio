@@ -6,9 +6,6 @@ import threading
 import queue
 import copy
 from . import ruff_adapter, config_manager
-import logging
-
-logging.basicConfig(level=logging.INFO)
 
 class Tooltip:
     def __init__(self, widget, text):

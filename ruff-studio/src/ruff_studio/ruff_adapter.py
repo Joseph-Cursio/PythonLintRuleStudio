@@ -53,20 +53,16 @@ def get_ruff_version():
 def discover_rules():
     """Discovers and categorizes all ruff rules, with caching."""
     version = get_ruff_version()
-    logging.info(f"Ruff version detected: {version}")
     cache_dir = os.path.expanduser("~/.cache/ruff-studio")
     cache_file = os.path.join(cache_dir, f"rules-v{version}.json")
-    logging.info(f"Cache file path: {cache_file}")
 
     if os.path.exists(cache_file):
-        logging.info("Cache file found. Attempting to read from cache.")
         try:
             with open(cache_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError) as e:
             logging.warning(f"Could not read cache file {cache_file}: {e}")
 
-    logging.info("Cache file not found or unreadable. Fetching rules from ruff.")
     output = _run_ruff_command(["rule", "--all", "--output-format", "json"])
     rules = json.loads(output)
 
