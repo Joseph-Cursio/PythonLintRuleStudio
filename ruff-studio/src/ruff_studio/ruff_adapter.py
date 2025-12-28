@@ -81,20 +81,8 @@ def scrape_rule_documentation(rule_name):
         logging.warning(f"Could not fetch documentation for rule {rule_name}: {e}")
         return None
 
-
-def discover_rules():
-    """Discovers and categorizes all ruff rules, with caching."""
-    version = get_ruff_version()
-    cache_dir = os.path.expanduser("~/.cache/ruff-studio")
-    cache_file = os.path.join(cache_dir, f"rules-v{version}.json")
-
-    if os.path.exists(cache_file):
-        try:
-            with open(cache_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError) as e:
-            logging.warning(f"Could not read cache file {cache_file}: {e}")
-
+def _fetch_and_process_rules():
+    """Fetches all ruff rules, scrapes their documentation, and categorizes them."""
     output = _run_ruff_command(["rule", "--all", "--output-format", "json"])
     rules = json.loads(output)
 
@@ -117,11 +105,31 @@ def discover_rules():
             categorized_rules[category_name] = {"prefix": prefix, "rules": []}
 
         categorized_rules[category_name]["rules"].append(rule)
+    return categorized_rules
+
+
+def discover_rules():
+    """Discovers and categorizes all ruff rules, with caching."""
+    version = get_ruff_version()
+    cache_dir = os.path.expanduser("~/.cache/ruff-studio")
+    cache_file = os.path.join(cache_dir, f"rules-v{version}-with-docs.json")
+
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                logging.info(f"Loading rules from cache: {cache_file}")
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logging.warning(f"Could not read cache file {cache_file}, fetching fresh rules: {e}")
+
+    logging.info("Fetching fresh rules from ruff.")
+    categorized_rules = _fetch_and_process_rules()
 
     try:
         os.makedirs(cache_dir, exist_ok=True)
         with open(cache_file, "w", encoding="utf-8") as f:
             json.dump(categorized_rules, f)
+        logging.info(f"Successfully wrote rules to cache: {cache_file}")
     except IOError as e:
         logging.warning(f"Could not write cache file {cache_file}: {e}")
 
