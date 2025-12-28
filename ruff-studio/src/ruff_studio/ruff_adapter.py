@@ -42,8 +42,26 @@ def _run_ruff_command(args):
         logging.error(f"Unicode decode error from ruff command: {e}")
         raise RuntimeError(f"Unicode decode error from ruff command: {e}") from e
 
+
+def get_ruff_version():
+    """Gets the current ruff version."""
+    output = _run_ruff_command(["--version"])
+    return output.strip().split(" ")[1]
+
+
 def discover_rules():
-    """Discovers all available ruff rules and their statuses."""
+    """Discovers all available ruff rules and their statuses, with caching."""
+    version = get_ruff_version()
+    cache_dir = os.path.expanduser("~/.cache/ruff-studio")
+    cache_file = os.path.join(cache_dir, f"rules-v{version}.json")
+
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logging.warning(f"Could not read cache file {cache_file}: {e}")
+
     output = _run_ruff_command(["rule", "--all", "--output-format", "json"])
     rules = json.loads(output)
 
@@ -56,6 +74,13 @@ def discover_rules():
             rule["status"] = "preview"
         else:
             rule["status"] = "stable"
+
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(rules, f)
+    except IOError as e:
+        logging.warning(f"Could not write cache file {cache_file}: {e}")
 
     return rules
 
