@@ -24,10 +24,10 @@ class App(ctk.CTk):
         self.queue = queue.Queue()
 
         # Create main layout
-        self.grid_row_configure(1, weight=1)
-        self.grid_column_configure(0, weight=1)
-        self.grid_column_configure(1, weight=3)
-        self.grid_column_configure(2, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=3)
+        self.grid_columnconfigure(2, weight=1)
 
         # --- Top Bar ---
         self.top_frame = ctk.CTkFrame(self, height=50)
@@ -251,15 +251,12 @@ class App(ctk.CTk):
 
         for rule_code, is_enabled in self.staged_changes.items():
             if is_enabled:
-                # To enable a rule, we must remove it from the ignore list.
                 if rule_code in ignore_list:
                     ignore_list.remove(rule_code)
-                # And ensure it's selected (it may not be if 'select' is very minimal)
                 is_selected = any(rule_code.startswith(s) for s in select_list)
                 if not is_selected:
                     select_list.append(rule_code)
             else:
-                # To disable a rule, we add it to the ignore list.
                 is_ignored = any(rule_code.startswith(i) for i in ignore_list)
                 if not is_ignored:
                     ignore_list.append(rule_code)
