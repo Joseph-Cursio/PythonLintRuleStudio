@@ -47,14 +47,15 @@ class App(ctk.CTk):
         self.rule_widgets = {}
         self.staged_changes = {}
         self.base_scan_results = []
+        self.selected_rule_frame = None
 
         self.queue = queue.Queue()
 
         # Create main layout
         self.grid_rowconfigure(1, weight=1)
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=3)
-        self.grid_columnconfigure(2, weight=1)
+        self.grid_columnconfigure(0, weight=2)
+        self.grid_columnconfigure(1, weight=2)
+        self.grid_columnconfigure(2, weight=3)
 
         # --- Top Bar ---
         self.top_frame = ctk.CTkFrame(self, height=50)
@@ -81,15 +82,15 @@ class App(ctk.CTk):
         self.rules_label = ctk.CTkLabel(self.rules_frame, text="Rules (Loading...)")
         self.rules_label.pack(pady=10)
 
-        self.results_frame = ctk.CTkScrollableFrame(self)
-        self.results_frame.grid(row=1, column=1, sticky="nsew", padx=0, pady=0)
-        self.results_label = ctk.CTkLabel(self.results_frame, text="Scan Results")
-        self.results_label.pack(pady=10)
-
         self.info_frame = ctk.CTkScrollableFrame(self)
-        self.info_frame.grid(row=1, column=2, sticky="nsew", padx=10, pady=0)
+        self.info_frame.grid(row=1, column=1, sticky="nsew", padx=10, pady=0)
         self.info_label = ctk.CTkLabel(self.info_frame, text="Rule Info")
         self.info_label.pack(pady=10)
+
+        self.results_frame = ctk.CTkScrollableFrame(self)
+        self.results_frame.grid(row=1, column=2, sticky="nsew", padx=0, pady=0)
+        self.results_label = ctk.CTkLabel(self.results_frame, text="Scan Results")
+        self.results_label.pack(pady=10)
 
         self.run_in_thread(self._discover_rules_worker, "discover_rules")
         self.process_queue()
@@ -233,7 +234,7 @@ class App(ctk.CTk):
                 Tooltip(cb, f"This rule is {rule['status']}.")
 
             cb.configure(state="disabled")
-            self.rule_widgets[rule['code']] = {'checkbox': cb, 'variable': var, 'rule_info': rule}
+            self.rule_widgets[rule['code']] = {'checkbox': cb, 'variable': var, 'rule_info': rule, 'frame': frame}
             label.bind("<Button-1>", lambda event, r=rule: self.show_rule_info(r))
 
     def is_rule_enabled(self, rule_code, ruff_config):
@@ -339,6 +340,16 @@ class App(ctk.CTk):
         return ruff_config
 
     def show_rule_info(self, rule):
+        # Reset the previously selected rule's background color
+        if self.selected_rule_frame:
+            self.selected_rule_frame.configure(fg_color="transparent")
+
+        # Highlight the new selected rule
+        rule_code = rule['code']
+        if rule_code in self.rule_widgets:
+            self.selected_rule_frame = self.rule_widgets[rule_code]['frame']
+            self.selected_rule_frame.configure(fg_color="lightblue")
+
         for widget in self.info_frame.winfo_children():
             if widget != self.info_label: widget.destroy()
         ctk.CTkLabel(self.info_frame, text=f"Code: {rule['code']}", wraplength=250).pack(pady=5, anchor="w")
