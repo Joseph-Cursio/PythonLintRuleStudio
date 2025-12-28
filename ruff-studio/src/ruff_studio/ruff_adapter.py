@@ -51,7 +51,7 @@ def get_ruff_version():
 
 
 def discover_rules():
-    """Discovers all available ruff rules and their statuses, with caching."""
+    """Discovers and categorizes all ruff rules, with caching."""
     version = get_ruff_version()
     cache_dir = os.path.expanduser("~/.cache/ruff-studio")
     cache_file = os.path.join(cache_dir, f"rules-v{version}.json")
@@ -93,14 +93,6 @@ def discover_rules():
         logging.warning(f"Could not write cache file {cache_file}: {e}")
 
     return categorized_rules
-    try:
-        os.makedirs(cache_dir, exist_ok=True)
-        with open(cache_file, "w", encoding="utf-8") as f:
-            json.dump(rules, f)
-    except IOError as e:
-        logging.warning(f"Could not write cache file {cache_file}: {e}")
-
-    return rules
 
 def run_scan(directory):
     """Runs a ruff scan on the given directory and returns the results as JSON."""
