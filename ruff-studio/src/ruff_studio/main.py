@@ -217,7 +217,7 @@ class App(ctk.CTk):
         return self.is_rule_enabled(rule_code, ruff_config)
 
     def update_rules_panel(self):
-        if not self.pyproject_data:
+        if not self.current_directory:
             for rule_code in self.rule_widgets:
                 self.rule_widgets[rule_code]['checkbox'].configure(state="disabled")
                 self.rule_widgets[rule_code]['variable'].set("")
