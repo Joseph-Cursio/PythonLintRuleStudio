@@ -132,6 +132,14 @@ class App(ctk.CTk):
                 self.all_rules = data
                 self.rules_label.configure(text="Rules")
                 self.populate_rules_initial()
+                self.managed_prefixes = {
+                    cat['prefix'] for cat in self.all_rules.values()
+                }
+                self.managed_rules = {
+                    rule['code']
+                    for cat in self.all_rules.values()
+                    for rule in cat['rules']
+                }
             elif command == "run_scan":
                 self.base_scan_results = data
                 self.update_results_panel(data)
@@ -215,27 +223,55 @@ class App(ctk.CTk):
                 ctk.CTkLabel(self.results_frame, text=result_text, wraplength=self.results_frame.winfo_width()-50, justify="left").pack(pady=2, anchor="w")
 
     def populate_rules_initial(self):
-        for rule in self.all_rules:
-            frame = ctk.CTkFrame(self.rules_frame)
-            frame.pack(fill="x", pady=1)
-            var = ctk.StringVar()
+        sorted_categories = sorted(self.all_rules.items())
 
-            rule_text = f"{rule['code']}"
-            if rule['status'] != 'stable':
-                rule_text += f" (⚠️ {rule['status']})"
+        for category_name, category_data in sorted_categories:
+            category_frame = ctk.CTkFrame(self.rules_frame)
+            category_frame.pack(fill="x", pady=(5, 1), padx=5)
 
-            cb = ctk.CTkCheckBox(frame, text=rule_text, variable=var, onvalue=rule['code'], offvalue="", command=lambda rc=rule['code']: self.stage_rule_change(rc))
-            cb.pack(side="left")
+            category_var = ctk.StringVar()
+            category_cb = ctk.CTkCheckBox(
+                category_frame,
+                text=f"{category_name} ({category_data['prefix']})",
+                variable=category_var,
+                onvalue=category_data['prefix'],
+                offvalue="",
+                command=lambda p=category_data['prefix'], cn=category_name: self.toggle_category(p, cn)
+            )
+            category_cb.pack(side="left")
+            category_cb.configure(state="disabled")
 
-            label = ctk.CTkLabel(frame, text=f"{rule['name']}", anchor="w")
-            label.pack(side="left", fill="x", expand=True, padx=5)
+            self.rule_widgets[category_name] = {
+                'category_checkbox': category_cb,
+                'category_variable': category_var,
+                'prefix': category_data['prefix'],
+                'rules': {}
+            }
 
-            if rule['status'] != 'stable':
-                Tooltip(cb, f"This rule is {rule['status']}.")
+            rules_container = ctk.CTkFrame(self.rules_frame, fg_color="transparent")
+            rules_container.pack(fill="x", padx=(25, 5))
 
-            cb.configure(state="disabled")
-            self.rule_widgets[rule['code']] = {'checkbox': cb, 'variable': var, 'rule_info': rule, 'frame': frame}
-            label.bind("<Button-1>", lambda event, r=rule: self.show_rule_info(r))
+            for rule in sorted(category_data['rules'], key=lambda r: r['code']):
+                frame = ctk.CTkFrame(rules_container)
+                frame.pack(fill="x", pady=1)
+                var = ctk.StringVar()
+
+                rule_text = f"{rule['code']}"
+                if rule['status'] != 'stable':
+                    rule_text += f" (⚠️ {rule['status']})"
+
+                cb = ctk.CTkCheckBox(frame, text=rule_text, variable=var, onvalue=rule['code'], offvalue="", command=lambda rc=rule['code'], cn=category_name: self.stage_rule_change(rc, cn))
+                cb.pack(side="left")
+
+                label = ctk.CTkLabel(frame, text=f"{rule['name']}", anchor="w")
+                label.pack(side="left", fill="x", expand=True, padx=5)
+
+                if rule['status'] != 'stable':
+                    Tooltip(cb, f"This rule is {rule['status']}.")
+
+                cb.configure(state="disabled")
+                self.rule_widgets[category_name]['rules'][rule['code']] = {'checkbox': cb, 'variable': var, 'rule_info': rule, 'frame': frame}
+                label.bind("<Button-1>", lambda event, r=rule: self.show_rule_info(r))
 
     def is_rule_enabled(self, rule_code, ruff_config):
         selected_codes = ruff_config.get("select", [])
@@ -262,24 +298,88 @@ class App(ctk.CTk):
 
     def update_rules_panel(self):
         if not self.current_directory:
-            for rule_code in self.rule_widgets:
-                self.rule_widgets[rule_code]['checkbox'].configure(state="disabled")
-                self.rule_widgets[rule_code]['variable'].set("")
+            for category_name, category_widgets in self.rule_widgets.items():
+                category_widgets['category_checkbox'].configure(state="disabled")
+                category_widgets['category_variable'].set("")
+                for rule_code, rule_widget in category_widgets['rules'].items():
+                    rule_widget['checkbox'].configure(state="disabled")
+                    rule_widget['variable'].set("")
             return
 
         ruff_config = self.pyproject_data.get("tool", {}).get("ruff", {}).get("lint", {})
-        for rule_code, widgets in self.rule_widgets.items():
-            widgets['checkbox'].configure(state="normal")
-            if self.get_effective_rule_state(rule_code, ruff_config):
-                widgets['variable'].set(rule_code)
-            else:
-                widgets['variable'].set("")
+        for category_name, category_widgets in self.rule_widgets.items():
+            category_widgets['category_checkbox'].configure(state="normal")
 
-    def stage_rule_change(self, rule_code):
-        is_checkbox_on = self.rule_widgets[rule_code]['variable'].get() == rule_code
+            all_rules_in_category_enabled = True
+            any_rule_in_category_enabled = False
+
+            for rule_code, rule_widget in category_widgets['rules'].items():
+                rule_widget['checkbox'].configure(state="normal")
+                is_enabled = self.get_effective_rule_state(rule_code, ruff_config)
+
+                if is_enabled:
+                    rule_widget['variable'].set(rule_code)
+                    any_rule_in_category_enabled = True
+                else:
+                    rule_widget['variable'].set("")
+                    all_rules_in_category_enabled = False
+
+            if all_rules_in_category_enabled:
+                category_widgets['category_variable'].set(category_widgets['prefix'])
+                category_widgets['category_checkbox'].configure(indeterminate=False)
+            elif any_rule_in_category_enabled:
+                category_widgets['category_variable'].set(category_widgets['prefix'])
+                category_widgets['category_checkbox'].configure(indeterminate=True)
+            else:
+                category_widgets['category_variable'].set("")
+                category_widgets['category_checkbox'].configure(indeterminate=False)
+
+    def stage_rule_change(self, rule_code, category_name):
+        rule_widget = self.rule_widgets[category_name]['rules'][rule_code]
+        is_checkbox_on = rule_widget['variable'].get() == rule_code
         self.staged_changes[rule_code] = is_checkbox_on
         self.simulate_button.configure(state="normal")
         self.apply_button.configure(state="normal")
+        self.update_category_checkbox_state(category_name)
+
+    def toggle_category(self, prefix, category_name):
+        category_widget = self.rule_widgets[category_name]
+        is_enabled = category_widget['category_variable'].get() == prefix
+
+        for rule_code in category_widget['rules'].keys():
+            self.staged_changes[rule_code] = is_enabled
+            rule_widget = self.rule_widgets[category_name]['rules'][rule_code]
+            if is_enabled:
+                rule_widget['variable'].set(rule_code)
+            else:
+                rule_widget['variable'].set("")
+
+        self.simulate_button.configure(state="normal")
+        self.apply_button.configure(state="normal")
+        self.update_category_checkbox_state(category_name)
+
+    def update_category_checkbox_state(self, category_name):
+        category_widgets = self.rule_widgets[category_name]
+        ruff_config = self.pyproject_data.get("tool", {}).get("ruff", {}).get("lint", {})
+
+        all_rules_on = True
+        any_rule_on = False
+
+        for rule_code, rule_widget in category_widgets['rules'].items():
+            if self.get_effective_rule_state(rule_code, ruff_config):
+                any_rule_on = True
+            else:
+                all_rules_on = False
+
+        if all_rules_on:
+            category_widgets['category_variable'].set(category_widgets['prefix'])
+            category_widgets['category_checkbox'].configure(indeterminate=False)
+        elif any_rule_on:
+            category_widgets['category_variable'].set(category_widgets['prefix'])
+            category_widgets['category_checkbox'].configure(indeterminate=True)
+        else:
+            category_widgets['category_variable'].set("")
+            category_widgets['category_checkbox'].configure(indeterminate=False)
 
     def simulate_changes(self):
         if not self.pyproject_data: return
@@ -288,26 +388,11 @@ class App(ctk.CTk):
         self.run_in_thread(self._run_scan_worker, "run_simulation", self.current_directory, sim_config_data)
 
     def apply_changes(self):
-        if not self.pyproject_data or not self.pyproject_path: return
+        if not self.pyproject_data or not self.pyproject_path:
+            return
 
-        ruff_config = self.pyproject_data.setdefault("tool", {}).setdefault("ruff", {}).setdefault("lint", {})
-        select_list = ruff_config.setdefault("select", [])
-        ignore_list = ruff_config.setdefault("ignore", [])
-
-        for rule_code, is_enabled in self.staged_changes.items():
-            if is_enabled:
-                if rule_code in ignore_list:
-                    ignore_list.remove(rule_code)
-                is_selected = any(rule_code.startswith(s) for s in select_list)
-                if not is_selected:
-                    select_list.append(rule_code)
-            else:
-                is_ignored = any(rule_code.startswith(i) for i in ignore_list)
-                if not is_ignored:
-                    ignore_list.append(rule_code)
-
-        ruff_config["select"] = sorted(list(set(select_list)))
-        ruff_config["ignore"] = sorted(list(set(ignore_list)))
+        effective_config = self.get_effective_config()
+        self.pyproject_data.setdefault("tool", {}).setdefault("ruff", {})["lint"] = effective_config
 
         config_manager.write_pyproject(self.pyproject_path, self.pyproject_data)
 
@@ -322,21 +407,31 @@ class App(ctk.CTk):
         effective_data = copy.deepcopy(self.pyproject_data)
         ruff_config = effective_data.setdefault("tool", {}).setdefault("ruff", {}).setdefault("lint", {})
 
-        select_list = ruff_config.setdefault("select", [])
-        ignore_list = ruff_config.setdefault("ignore", [])
+        current_select = set(ruff_config.get("select", []))
+        current_ignore = set(ruff_config.get("ignore", []))
 
-        for rule_code, is_enabled in self.staged_changes.items():
-            if is_enabled:
-                if rule_code in ignore_list: ignore_list.remove(rule_code)
-                if not any(rule_code.startswith(s) for s in select_list):
-                    select_list.append(rule_code)
-            else:
-                if not any(rule_code.startswith(i) for i in ignore_list):
-                    ignore_list.append(rule_code)
+        # Preserve unmanaged rules
+        final_select = {s for s in current_select if s not in self.managed_prefixes and s not in self.managed_rules}
+        final_ignore = {i for i in current_ignore if i not in self.managed_prefixes and i not in self.managed_rules}
 
-        ruff_config["select"] = sorted(list(set(select_list)))
-        ruff_config["ignore"] = sorted(list(set(ignore_list)))
+        for category_name, category_widgets in self.rule_widgets.items():
+            prefix = category_widgets['prefix']
 
+            category_rules = set(category_widgets['rules'].keys())
+
+            enabled_rules = {
+                rc for rc in category_rules
+                if self.get_effective_rule_state(rc, ruff_config)
+            }
+
+            if len(enabled_rules) == len(category_rules):
+                final_select.add(prefix)
+            elif enabled_rules:
+                final_select.add(prefix)
+                final_ignore.update(category_rules - enabled_rules)
+
+        ruff_config["select"] = sorted(list(final_select))
+        ruff_config["ignore"] = sorted(list(final_ignore))
         return ruff_config
 
     def show_rule_info(self, rule):
@@ -346,8 +441,10 @@ class App(ctk.CTk):
 
         # Highlight the new selected rule
         rule_code = rule['code']
-        if rule_code in self.rule_widgets:
-            self.selected_rule_frame = self.rule_widgets[rule_code]['frame']
+        category_name = rule.get("linter", "Unknown")
+
+        if category_name in self.rule_widgets and rule_code in self.rule_widgets[category_name]['rules']:
+            self.selected_rule_frame = self.rule_widgets[category_name]['rules'][rule_code]['frame']
             self.selected_rule_frame.configure(fg_color="lightblue")
 
         for widget in self.info_frame.winfo_children():
