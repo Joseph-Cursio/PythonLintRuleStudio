@@ -455,6 +455,11 @@ class App(ctk.CTk):
         ctk.CTkLabel(self.info_frame, text=f"Fixable: {'Yes' if rule['fix'] else 'No'}", wraplength=250).pack(pady=5, anchor="w")
         ctk.CTkLabel(self.info_frame, text=f"Summary: {rule['summary']}", wraplength=250, justify="left").pack(pady=5, anchor="w")
 
+        if rule.get('documentation'):
+            ctk.CTkLabel(self.info_frame, text="─" * 40).pack(pady=5)
+            ctk.CTkLabel(self.info_frame, text=f"Documentation:", justify="left").pack(pady=5, anchor="w")
+            ctk.CTkLabel(self.info_frame, text=rule['documentation'], wraplength=250, justify="left").pack(pady=5, anchor="w")
+
 if __name__ == "__main__":
     app = App()
     app.mainloop()
