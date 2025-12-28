@@ -4,6 +4,7 @@ import logging
 import tomlkit
 import tempfile
 import os
+import re
 
 def _run_ruff_command(args):
     """Utility to run a ruff command and handle common errors."""
@@ -65,6 +66,7 @@ def discover_rules():
     output = _run_ruff_command(["rule", "--all", "--output-format", "json"])
     rules = json.loads(output)
 
+    categorized_rules = {}
     for rule in rules:
         if rule.get("deprecated"):
             rule["status"] = "deprecated"
@@ -75,6 +77,22 @@ def discover_rules():
         else:
             rule["status"] = "stable"
 
+        category_name = rule.get("linter", "Unknown")
+        if category_name not in categorized_rules:
+            match = re.match(r"[A-Z]+", rule["code"])
+            prefix = match.group(0) if match else ""
+            categorized_rules[category_name] = {"prefix": prefix, "rules": []}
+
+        categorized_rules[category_name]["rules"].append(rule)
+
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(categorized_rules, f)
+    except IOError as e:
+        logging.warning(f"Could not write cache file {cache_file}: {e}")
+
+    return categorized_rules
     try:
         os.makedirs(cache_dir, exist_ok=True)
         with open(cache_file, "w", encoding="utf-8") as f:
