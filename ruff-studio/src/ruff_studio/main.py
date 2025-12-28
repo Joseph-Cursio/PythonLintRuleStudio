@@ -6,6 +6,9 @@ import threading
 import queue
 import copy
 from . import ruff_adapter, config_manager
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 class Tooltip:
     def __init__(self, widget, text):
@@ -244,6 +247,7 @@ class App(ctk.CTk):
             self.rule_widgets[category_name] = {
                 'category_checkbox': category_cb,
                 'category_variable': category_var,
+                'original_border_color': category_cb.cget("border_color"),
                 'prefix': category_data['prefix'],
                 'rules': {}
             }
@@ -326,13 +330,13 @@ class App(ctk.CTk):
 
             if all_rules_in_category_enabled:
                 category_widgets['category_variable'].set(category_widgets['prefix'])
-                category_widgets['category_checkbox'].configure(indeterminate=False)
+                category_widgets['category_checkbox'].configure(border_color=category_widgets['original_border_color'])
             elif any_rule_in_category_enabled:
                 category_widgets['category_variable'].set(category_widgets['prefix'])
-                category_widgets['category_checkbox'].configure(indeterminate=True)
+                category_widgets['category_checkbox'].configure(border_color="yellow")
             else:
                 category_widgets['category_variable'].set("")
-                category_widgets['category_checkbox'].configure(indeterminate=False)
+                category_widgets['category_checkbox'].configure(border_color=category_widgets['original_border_color'])
 
     def stage_rule_change(self, rule_code, category_name):
         rule_widget = self.rule_widgets[category_name]['rules'][rule_code]
@@ -373,13 +377,13 @@ class App(ctk.CTk):
 
         if all_rules_on:
             category_widgets['category_variable'].set(category_widgets['prefix'])
-            category_widgets['category_checkbox'].configure(indeterminate=False)
+            category_widgets['category_checkbox'].configure(border_color=category_widgets['original_border_color'])
         elif any_rule_on:
             category_widgets['category_variable'].set(category_widgets['prefix'])
-            category_widgets['category_checkbox'].configure(indeterminate=True)
+            category_widgets['category_checkbox'].configure(border_color="yellow")
         else:
             category_widgets['category_variable'].set("")
-            category_widgets['category_checkbox'].configure(indeterminate=False)
+            category_widgets['category_checkbox'].configure(border_color=category_widgets['original_border_color'])
 
     def simulate_changes(self):
         if not self.pyproject_data: return
