@@ -154,13 +154,20 @@ class App(ctk.CTk):
             result_text = f"{result['filename']}:{result['location']['row']}:{result['location']['column']} {result['code']} {result['message']}"
             ctk.CTkLabel(self.results_frame, text=result_text, wraplength=self.results_frame.winfo_width()-50, justify="left").pack(pady=2, anchor="w")
 
+    def _make_hashable(self, data):
+        if isinstance(data, dict):
+            return tuple(sorted((k, self._make_hashable(v)) for k, v in data.items()))
+        if isinstance(data, list):
+            return tuple(self._make_hashable(v) for v in data)
+        return data
+
     def update_simulation_results_panel(self, sim_results):
         self.results_label.configure(text="Simulation Results")
         for widget in self.results_frame.winfo_children():
             if widget != self.results_label: widget.destroy()
 
-        base_set = {tuple(sorted(d.items())) for d in self.base_scan_results}
-        sim_set = {tuple(sorted(d.items())) for d in sim_results}
+        base_set = {self._make_hashable(d) for d in self.base_scan_results}
+        sim_set = {self._make_hashable(d) for d in sim_results}
 
         new_violations = [dict(s) for s in sim_set - base_set]
         fixed_violations = [dict(s) for s in base_set - sim_set]
