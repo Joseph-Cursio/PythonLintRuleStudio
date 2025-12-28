@@ -7,6 +7,32 @@ import queue
 import copy
 from . import ruff_adapter, config_manager
 
+class Tooltip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tooltip_window = None
+        self.widget.bind("<Enter>", self.show_tooltip)
+        self.widget.bind("<Leave>", self.hide_tooltip)
+
+    def show_tooltip(self, event):
+        if self.tooltip_window or not self.text:
+            return
+        x, y, _, _ = self.widget.bbox("insert")
+        x += self.widget.winfo_rootx() + 25
+        y += self.widget.winfo_rooty() + 25
+        self.tooltip_window = ctk.CTkToplevel(self.widget)
+        self.tooltip_window.wm_overrideredirect(True)
+        self.tooltip_window.wm_geometry(f"+{x}+{y}")
+        label = ctk.CTkLabel(self.tooltip_window, text=self.text, corner_radius=5,
+                             bg_color="white", text_color="black")
+        label.pack(ipadx=5)
+
+    def hide_tooltip(self, event):
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+        self.tooltip_window = None
+
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -192,10 +218,20 @@ class App(ctk.CTk):
             frame = ctk.CTkFrame(self.rules_frame)
             frame.pack(fill="x", pady=1)
             var = ctk.StringVar()
-            cb = ctk.CTkCheckBox(frame, text=f"{rule['code']}", variable=var, onvalue=rule['code'], offvalue="", command=lambda rc=rule['code']: self.stage_rule_change(rc))
+
+            rule_text = f"{rule['code']}"
+            if rule['status'] != 'stable':
+                rule_text += f" (⚠️ {rule['status']})"
+
+            cb = ctk.CTkCheckBox(frame, text=rule_text, variable=var, onvalue=rule['code'], offvalue="", command=lambda rc=rule['code']: self.stage_rule_change(rc))
             cb.pack(side="left")
+
             label = ctk.CTkLabel(frame, text=f"{rule['name']}", anchor="w")
             label.pack(side="left", fill="x", expand=True, padx=5)
+
+            if rule['status'] != 'stable':
+                Tooltip(cb, f"This rule is {rule['status']}.")
+
             cb.configure(state="disabled")
             self.rule_widgets[rule['code']] = {'checkbox': cb, 'variable': var, 'rule_info': rule}
             label.bind("<Button-1>", lambda event, r=rule: self.show_rule_info(r))
