@@ -10,7 +10,9 @@ requires-python = ">=3.12"
 dependencies = [
     "ruff (>=0.14.10,<0.15.0)",
     "tomlkit (>=0.13.3,<0.14.0)",
-    "customtkinter (>=5.2.2,<6.0.0)"
+    "customtkinter (>=5.2.2,<6.0.0)",
+    "requests (>=2.31.0,<3.0.0)",
+    "beautifulsoup4 (>=4.12.3,<5.0.0)"
 ]
 
 [tool.poetry]
