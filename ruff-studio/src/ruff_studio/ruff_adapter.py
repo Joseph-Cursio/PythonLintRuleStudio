@@ -69,18 +69,18 @@ def scrape_rule_documentation(rule_name):
         for section in sections:
             header = content_div.find("h2", string=section)
             if header:
-                # Format as a prominent plain-text header
-                doc_parts.append(f"\n--- {section.upper()} ---")
+                # Add a blank line for separation if content already exists
+                if doc_parts:
+                    doc_parts.append("")
+                doc_parts.append(f"--- {section.upper()} ---")
                 next_node = header.find_next_sibling()
                 while next_node and next_node.name != "h2":
-                    # Strip leading/trailing whitespace from each part
                     text_content = next_node.get_text().strip()
                     if text_content:
                         doc_parts.append(text_content)
                     next_node = next_node.find_next_sibling()
 
-        # Join with newlines, but filter out any empty parts
-        return "\n".join(filter(None, doc_parts)).strip()
+        return "\n".join(doc_parts)
 
     except requests.RequestException as e:
         logging.warning(f"Could not fetch documentation for rule {rule_name}: {e}")

@@ -25,13 +25,13 @@ class TestRuffAdapter(unittest.TestCase):
             {"name": "Unused import", "code": "F401", "linter": "pyflakes"},
             {"name": "Some other rule", "code": "A001", "linter": "flake8-builtins"}
         ])
-        mock_scrape.return_value = "\n--- WHAT IT DOES ---\nScraped documentation"
+        mock_scrape.return_value = "--- WHAT IT DOES ---\nScraped documentation"
 
         rules = discover_rules()
 
         # Verify final structure
         self.assertIn("pyflakes", rules)
-        self.assertEqual(rules["pyflakes"]["rules"][0]["documentation"], "\n--- WHAT IT DOES ---\nScraped documentation")
+        self.assertEqual(rules["pyflakes"]["rules"][0]["documentation"], "--- WHAT IT DOES ---\nScraped documentation")
 
         # Verify that the file was opened for writing twice (once per rule)
         self.assertEqual(mock_file.call_count, 2)
@@ -63,7 +63,7 @@ class TestRuffAdapter(unittest.TestCase):
 
         # Verify the final data contains both rules, with old and new docs
         self.assertEqual(rules["pyflakes"]["rules"][0]["documentation"], "Existing documentation")
-        self.assertEqual(rules["flake8-builtins"]["rules"][0]["documentation"], "\n--- WHAT IT DOES ---\nScraped documentation")
+        self.assertEqual(rules["flake8-builtins"]["rules"][0]["documentation"], "--- WHAT IT DOES ---\nScraped documentation")
 
         # Verify that the file was opened once to read and once to write
         self.assertEqual(mock_file.call_count, 2)
