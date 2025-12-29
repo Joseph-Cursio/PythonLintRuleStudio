@@ -564,6 +564,11 @@ class App(ctk.CTk):
                 wraplength=250, justify="left"
             ).pack(pady=5, anchor="w")
 
+        if rule.get('documentation'):
+            ctk.CTkLabel(self.info_frame, text="─" * 40).pack(pady=5)
+            ctk.CTkLabel(self.info_frame, text=f"Documentation:", justify="left").pack(pady=5, anchor="w")
+            ctk.CTkLabel(self.info_frame, text=rule['documentation'], wraplength=250, justify="left").pack(pady=5, anchor="w")
+
 if __name__ == "__main__":
     app = App()
     app.mainloop()
