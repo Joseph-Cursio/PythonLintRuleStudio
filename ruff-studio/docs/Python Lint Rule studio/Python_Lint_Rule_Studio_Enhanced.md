@@ -427,6 +427,11 @@ Several market forces make this the right time:
 
 ## Feature Specifications
 
+### Implementation Status
+
+- [x] Rule Catalog and Browser
+  - [x] Collapsible categories for rules
+
 ### 1. Rule Catalog and Browser
 
 #### Overview
