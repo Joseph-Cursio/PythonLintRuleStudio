@@ -59,18 +59,30 @@ class App(ctk.CTk):
 
         # --- Top Bar ---
         self.top_frame = ctk.CTkFrame(self, height=50)
-        self.top_frame.grid(row=0, column=0, columnspan=3, sticky="ew", padx=10, pady=10)
+        self.top_frame.grid(
+            row=0, column=0, columnspan=3, sticky="ew", padx=10, pady=10
+        )
 
-        self.select_button = ctk.CTkButton(self.top_frame, text="Select Directory", command=self.select_directory)
+        self.select_button = ctk.CTkButton(
+            self.top_frame, text="Select Directory", command=self.select_directory
+        )
         self.select_button.pack(side="left", padx=10)
-        self.directory_label = ctk.CTkLabel(self.top_frame, text="No directory selected")
+        self.directory_label = ctk.CTkLabel(
+            self.top_frame, text="No directory selected"
+        )
         self.directory_label.pack(side="left", padx=10)
 
         self.action_frame = ctk.CTkFrame(self.top_frame)
         self.action_frame.pack(side="right", padx=10)
-        self.simulate_button = ctk.CTkButton(self.action_frame, text="Simulate Changes", state="disabled", command=self.simulate_changes)
+        self.simulate_button = ctk.CTkButton(
+            self.action_frame, text="Simulate Changes", state="disabled",
+            command=self.simulate_changes
+        )
         self.simulate_button.pack(side="left", padx=5)
-        self.apply_button = ctk.CTkButton(self.action_frame, text="Apply Changes", state="disabled", command=self.apply_changes)
+        self.apply_button = ctk.CTkButton(
+            self.action_frame, text="Apply Changes", state="disabled",
+            command=self.apply_changes
+        )
         self.apply_button.pack(side="left", padx=5)
 
         self.status_label = ctk.CTkLabel(self.top_frame, text="")
@@ -127,7 +139,8 @@ class App(ctk.CTk):
                 if isinstance(data, FileNotFoundError):
                     messagebox.showerror("Error", "Ruff executable not found...")
                 else:
-                    messagebox.showerror("Error", f"An unexpected error occurred:\n\n{data}")
+                    error_message = f"An unexpected error occurred:\n\n{data}"
+                    messagebox.showerror("Error", error_message)
             elif command == "discover_rules":
                 self.all_rules = data
                 self.rules_label.configure(text="Rules")
@@ -170,7 +183,8 @@ class App(ctk.CTk):
                 self.pyproject_data = tomlkit.document()
 
             for widget in self.results_frame.winfo_children():
-                if widget != self.results_label: widget.destroy()
+                if widget != self.results_label:
+                    widget.destroy()
             self.results_label.configure(text="Scanning...")
 
             self.run_in_thread(self._run_scan_worker, "run_scan", directory)
@@ -179,15 +193,22 @@ class App(ctk.CTk):
     def update_results_panel(self, results):
         self.results_label.configure(text="Scan Results")
         for widget in self.results_frame.winfo_children():
-            if widget != self.results_label: widget.destroy()
+            if widget != self.results_label:
+                widget.destroy()
 
         if not results:
             ctk.CTkLabel(self.results_frame, text="No issues found.").pack(pady=5)
             return
 
         for result in results:
-            result_text = f"{result['filename']}:{result['location']['row']}:{result['location']['column']} {result['code']} {result['message']}"
-            ctk.CTkLabel(self.results_frame, text=result_text, wraplength=self.results_frame.winfo_width()-50, justify="left").pack(pady=2, anchor="w")
+            result_text = (
+                f"{result['filename']}:{result['location']['row']}:"
+                f"{result['location']['column']} {result['code']} {result['message']}"
+            )
+            ctk.CTkLabel(
+                self.results_frame, text=result_text,
+                wraplength=self.results_frame.winfo_width()-50, justify="left"
+            ).pack(pady=2, anchor="w")
 
     def _make_hashable(self, data):
         if isinstance(data, dict):
@@ -199,7 +220,8 @@ class App(ctk.CTk):
     def update_simulation_results_panel(self, sim_results):
         self.results_label.configure(text="Simulation Results")
         for widget in self.results_frame.winfo_children():
-            if widget != self.results_label: widget.destroy()
+            if widget != self.results_label:
+                widget.destroy()
 
         base_set = {self._make_hashable(d) for d in self.base_scan_results}
         sim_set = {self._make_hashable(d) for d in sim_results}
@@ -207,20 +229,43 @@ class App(ctk.CTk):
         new_violations = [dict(s) for s in sim_set - base_set]
         fixed_violations = [dict(s) for s in base_set - sim_set]
 
-        summary = f"Simulation complete: {len(new_violations)} new violations, {len(fixed_violations)} fixed violations."
-        ctk.CTkLabel(self.results_frame, text=summary, font=("", 14, "bold")).pack(pady=10)
+        summary = (
+            f"Simulation complete: {len(new_violations)} new violations, "
+            f"{len(fixed_violations)} fixed violations."
+        )
+        ctk.CTkLabel(
+            self.results_frame, text=summary, font=("", 14, "bold")
+        ).pack(pady=10)
 
         if new_violations:
-            ctk.CTkLabel(self.results_frame, text="New Violations:", font=("", 12, "underline")).pack(pady=5)
+            ctk.CTkLabel(
+                self.results_frame, text="New Violations:", font=("", 12, "underline")
+            ).pack(pady=5)
             for result in new_violations:
-                result_text = f"+ {result['filename']}:{result['location']['row']}:{result['location']['column']} {result['code']} {result['message']}"
-                ctk.CTkLabel(self.results_frame, text=result_text, wraplength=self.results_frame.winfo_width()-50, justify="left").pack(pady=2, anchor="w")
+                result_text = (
+                    f"+ {result['filename']}:{result['location']['row']}:"
+                    f"{result['location']['column']} {result['code']}\n"
+                    f"  {result['message']}"
+                )
+                ctk.CTkLabel(
+                    self.results_frame, text=result_text,
+                    wraplength=self.results_frame.winfo_width()-50, justify="left"
+                ).pack(pady=2, anchor="w")
 
         if fixed_violations:
-            ctk.CTkLabel(self.results_frame, text="Fixed Violations:", font=("", 12, "underline")).pack(pady=5)
+            ctk.CTkLabel(
+                self.results_frame, text="Fixed Violations:", font=("", 12, "underline")
+            ).pack(pady=5)
             for result in fixed_violations:
-                result_text = f"- {result['filename']}:{result['location']['row']}:{result['location']['column']} {result['code']} {result['message']}"
-                ctk.CTkLabel(self.results_frame, text=result_text, wraplength=self.results_frame.winfo_width()-50, justify="left").pack(pady=2, anchor="w")
+                result_text = (
+                    f"- {result['filename']}:{result['location']['row']}:"
+                    f"{result['location']['column']} {result['code']}\n"
+                    f"  {result['message']}"
+                )
+                ctk.CTkLabel(
+                    self.results_frame, text=result_text,
+                    wraplength=self.results_frame.winfo_width()-50, justify="left"
+                ).pack(pady=2, anchor="w")
 
     def populate_rules_initial(self):
         sorted_categories = sorted(self.all_rules.items())
@@ -236,7 +281,10 @@ class App(ctk.CTk):
                 variable=category_var,
                 onvalue=category_data['prefix'],
                 offvalue="",
-                command=lambda p=category_data['prefix'], cn=category_name: self.toggle_category(p, cn)
+                command=(
+                    lambda p=category_data['prefix'], cn=category_name:
+                    self.toggle_category(p, cn)
+                )
             )
             category_cb.pack(side="left")
             category_cb.configure(state="disabled")
@@ -261,7 +309,11 @@ class App(ctk.CTk):
                 if rule['status'] != 'stable':
                     rule_text += f" (⚠️ {rule['status']})"
 
-                cb = ctk.CTkCheckBox(frame, text=rule_text, variable=var, onvalue=rule['code'], offvalue="", command=lambda rc=rule['code'], cn=category_name: self.stage_rule_change(rc, cn))
+                cb = ctk.CTkCheckBox(
+                    frame, text=rule_text, variable=var, onvalue=rule['code'],
+                    offvalue="", command=lambda rc=rule['code'], cn=category_name:
+                    self.stage_rule_change(rc, cn)
+                )
                 cb.pack(side="left")
 
                 label = ctk.CTkLabel(frame, text=f"{rule['name']}", anchor="w")
@@ -271,7 +323,13 @@ class App(ctk.CTk):
                     Tooltip(cb, f"This rule is {rule['status']}.")
 
                 cb.configure(state="disabled")
-                self.rule_widgets[category_name]['rules'][rule['code']] = {'checkbox': cb, 'variable': var, 'rule_info': rule, 'frame': frame}
+                rule_widget_data = {
+                    'checkbox': cb, 'variable': var,
+                    'rule_info': rule, 'frame': frame
+                }
+                self.rule_widgets[category_name]['rules'][rule['code']] = (
+                    rule_widget_data
+                )
                 label.bind("<Button-1>", lambda event, r=rule: self.show_rule_info(r))
 
     def is_rule_enabled(self, rule_code, ruff_config):
@@ -283,7 +341,8 @@ class App(ctk.CTk):
             if rule_code.startswith(selected):
                 is_selected = True
                 break
-        if not is_selected: return False
+        if not is_selected:
+            return False
 
         is_ignored = False
         for ignored in ignored_codes:
@@ -307,7 +366,11 @@ class App(ctk.CTk):
                     rule_widget['variable'].set("")
             return
 
-        ruff_config = self.pyproject_data.get("tool", {}).get("ruff", {}).get("lint", {})
+        ruff_config = (
+            self.pyproject_data.get("tool", {})
+            .get("ruff", {})
+            .get("lint", {})
+        )
         for category_name, category_widgets in self.rule_widgets.items():
             category_widgets['category_checkbox'].configure(state="normal")
 
@@ -361,7 +424,11 @@ class App(ctk.CTk):
 
     def update_category_checkbox_state(self, category_name):
         category_widgets = self.rule_widgets[category_name]
-        ruff_config = self.pyproject_data.get("tool", {}).get("ruff", {}).get("lint", {})
+        ruff_config = (
+            self.pyproject_data.get("tool", {})
+            .get("ruff", {})
+            .get("lint", {})
+        )
 
         all_rules_on = True
         any_rule_on = False
@@ -383,17 +450,24 @@ class App(ctk.CTk):
             category_widgets['category_checkbox'].configure(border_color=category_widgets['original_border_color'])
 
     def simulate_changes(self):
-        if not self.pyproject_data: return
+        if not self.pyproject_data:
+            return
         sim_config_data = self.get_effective_config()
         self.results_label.configure(text="Simulating...")
-        self.run_in_thread(self._run_scan_worker, "run_simulation", self.current_directory, sim_config_data)
+        self.run_in_thread(
+            self._run_scan_worker, "run_simulation",
+            self.current_directory, sim_config_data
+        )
 
     def apply_changes(self):
         if not self.pyproject_data or not self.pyproject_path:
             return
 
         effective_config = self.get_effective_config()
-        self.pyproject_data.setdefault("tool", {}).setdefault("ruff", {})["lint"] = effective_config
+        (
+            self.pyproject_data.setdefault("tool", {})
+            .setdefault("ruff", {})["lint"]
+        ) = effective_config
 
         config_manager.write_pyproject(self.pyproject_path, self.pyproject_data)
 
@@ -406,14 +480,24 @@ class App(ctk.CTk):
 
     def get_effective_config(self):
         effective_data = copy.deepcopy(self.pyproject_data)
-        ruff_config = effective_data.setdefault("tool", {}).setdefault("ruff", {}).setdefault("lint", {})
+        ruff_config = (
+            effective_data.setdefault("tool", {})
+            .setdefault("ruff", {})
+            .setdefault("lint", {})
+        )
 
         current_select = set(ruff_config.get("select", []))
         current_ignore = set(ruff_config.get("ignore", []))
 
         # Preserve unmanaged rules
-        final_select = {s for s in current_select if s not in self.managed_prefixes and s not in self.managed_rules}
-        final_ignore = {i for i in current_ignore if i not in self.managed_prefixes and i not in self.managed_rules}
+        final_select = {
+            s for s in current_select
+            if s not in self.managed_prefixes and s not in self.managed_rules
+        }
+        final_ignore = {
+            i for i in current_ignore
+            if i not in self.managed_prefixes and i not in self.managed_rules
+        }
 
         for category_name, category_widgets in self.rule_widgets.items():
             prefix = category_widgets['prefix']
@@ -444,16 +528,41 @@ class App(ctk.CTk):
         rule_code = rule['code']
         category_name = rule.get("linter", "Unknown")
 
-        if category_name in self.rule_widgets and rule_code in self.rule_widgets[category_name]['rules']:
-            self.selected_rule_frame = self.rule_widgets[category_name]['rules'][rule_code]['frame']
+        if (category_name in self.rule_widgets and
+                rule_code in self.rule_widgets[category_name]['rules']):
+            self.selected_rule_frame = (
+                self.rule_widgets[category_name]['rules'][rule_code]['frame']
+            )
             self.selected_rule_frame.configure(fg_color="lightblue")
 
         for widget in self.info_frame.winfo_children():
-            if widget != self.info_label: widget.destroy()
-        ctk.CTkLabel(self.info_frame, text=f"Code: {rule['code']}", wraplength=250).pack(pady=5, anchor="w")
-        ctk.CTkLabel(self.info_frame, text=f"Name: {rule['name']}", wraplength=250).pack(pady=5, anchor="w")
-        ctk.CTkLabel(self.info_frame, text=f"Fixable: {'Yes' if rule['fix'] else 'No'}", wraplength=250).pack(pady=5, anchor="w")
-        ctk.CTkLabel(self.info_frame, text=f"Summary: {rule['summary']}", wraplength=250, justify="left").pack(pady=5, anchor="w")
+            if widget != self.info_label:
+                widget.destroy()
+
+        ctk.CTkLabel(
+            self.info_frame, text=f"Code: {rule['code']}", wraplength=250
+        ).pack(pady=5, anchor="w")
+        ctk.CTkLabel(
+            self.info_frame, text=f"Name: {rule['name']}", wraplength=250
+        ).pack(pady=5, anchor="w")
+        ctk.CTkLabel(
+            self.info_frame, text=f"Fixable: {'Yes' if rule['fix'] else 'No'}",
+            wraplength=250
+        ).pack(pady=5, anchor="w")
+        ctk.CTkLabel(
+            self.info_frame, text=f"Summary: {rule['summary']}",
+            wraplength=250, justify="left"
+        ).pack(pady=5, anchor="w")
+
+        if rule.get('documentation'):
+            ctk.CTkLabel(self.info_frame, text="─" * 40).pack(pady=5)
+            ctk.CTkLabel(
+                self.info_frame, text="Documentation:", justify="left"
+            ).pack(pady=5, anchor="w")
+            ctk.CTkLabel(
+                self.info_frame, text=rule['documentation'],
+                wraplength=250, justify="left"
+            ).pack(pady=5, anchor="w")
 
         if rule.get('documentation'):
             ctk.CTkLabel(self.info_frame, text="─" * 40).pack(pady=5)

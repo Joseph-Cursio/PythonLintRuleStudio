@@ -1,5 +1,4 @@
 import unittest
-import tomlkit
 from ruff_studio.config_manager import read_pyproject, write_pyproject
 import os
 
@@ -37,18 +36,15 @@ line-length = 88
         # Write the data to a new file
         write_pyproject(self.output_toml_path, data)
 
-        # Read the original and new files
-        with open(self.test_toml_path, "r") as f:
-            original_content = f.read()
-
         with open(self.output_toml_path, "r") as f:
             new_content = f.read()
 
         # Assert that the new content contains the modification
         self.assertIn("line-length = 100", new_content)
 
-        # Assert that comments and structure are preserved (this is a bit tricky,
-        # tomlkit doesn't guarantee exact byte-for-byte reproduction, but comments should be there)
+        # Assert that comments and structure are preserved
+        # (tomlkit doesn't guarantee exact byte-for-byte reproduction,
+        # but comments should be there)
         self.assertIn("# This is a comment", new_content)
         self.assertIn("# version comment", new_content)
         self.assertIn("# another comment", new_content)

@@ -29,7 +29,9 @@ def _run_ruff_command(args):
             return process.stdout
 
         # Handle other non-zero exit codes if needed
-        logging.error(f"Ruff command failed unexpectedly with exit code {process.returncode}")
+        logging.error(
+            f"Ruff command failed unexpectedly with exit code {process.returncode}"
+        )
         logging.error(f"Ruff stderr: {process.stderr}")
         raise RuntimeError(f"Ruff command failed: {process.stderr}")
 
@@ -105,27 +107,35 @@ def discover_rules():
         try:
             with open(cache_file, "r", encoding="utf-8") as f:
                 categorized_rules = json.load(f)
-                logging.info(f"Loaded {len(categorized_rules)} rule categories from cache.")
+                logging.info(
+                    f"Loaded {len(categorized_rules)} categories from cache."
+                )
         except (json.JSONDecodeError, IOError) as e:
-            logging.warning(f"Could not read cache file {cache_file}, starting fresh: {e}")
+            logging.warning(f"Could not read cache file {cache_file}: {e}")
             categorized_rules = {}
 
     # Get the definitive list of all rules directly from ruff
-    all_rules_raw = json.loads(_run_ruff_command(["rule", "--all", "--output-format", "json"]))
+    ruff_args = ["rule", "--all", "--output-format", "json"]
+    all_rules_raw = json.loads(_run_ruff_command(ruff_args))
 
     # Create a quick lookup for existing rules in the cache
     cached_rules_lookup = {
-        rule['code']: rule for category in categorized_rules.values() for rule in category.get('rules', [])
+        rule['code']: rule
+        for category in categorized_rules.values()
+        for rule in category.get('rules', [])
     }
 
     cache_updated = False
     for i, rule_data in enumerate(all_rules_raw):
         # Check if rule is already cached and has documentation
-        if rule_data['code'] in cached_rules_lookup and cached_rules_lookup[rule_data['code']].get('documentation'):
-            continue  # Skip if documentation already exists
+        if (rule_data['code'] in cached_rules_lookup and
+                cached_rules_lookup[rule_data['code']].get('documentation')):
+            continue
 
         # If not, scrape documentation and update the rule data
-        logging.info(f"Scraping docs for '{rule_data['name']}' ({i+1}/{len(all_rules_raw)})...")
+        logging.info(
+            f"Scraping docs for '{rule_data['name']}' ({i+1}/{len(all_rules_raw)})..."
+        )
         rule_data['documentation'] = scrape_rule_documentation(rule_data['name'])
 
         # Add status field
@@ -170,7 +180,11 @@ def discover_rules():
 def run_scan(directory):
     """Runs a ruff scan on the given directory and returns the results as JSON."""
     try:
-        output = _run_ruff_command(["check", directory, "--output-format", "json", "--force-exclude", "--no-respect-gitignore"])
+        ruff_args = [
+            "check", directory, "--output-format", "json",
+            "--force-exclude", "--no-respect-gitignore"
+        ]
+        output = _run_ruff_command(ruff_args)
         return json.loads(output)
     except (RuntimeError, json.JSONDecodeError):
         return []
@@ -179,7 +193,9 @@ def run_scan_with_config(directory, config_data):
     """Runs a ruff scan with a temporary configuration."""
     scan_dir = os.path.dirname(directory) if not os.path.isdir(directory) else directory
 
-    with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".toml", dir=scan_dir) as temp_config:
+    with tempfile.NamedTemporaryFile(
+        mode="w+", delete=False, suffix=".toml", dir=scan_dir
+    ) as temp_config:
         toml_string = tomlkit.dumps(config_data)
         temp_config.write(toml_string)
         temp_config_path = temp_config.name

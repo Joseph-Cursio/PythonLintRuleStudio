@@ -18,7 +18,9 @@ class TestRuffAdapter(unittest.TestCase):
     @patch("ruff_studio.ruff_adapter._run_ruff_command")
     @patch("os.path.exists")
     @patch("builtins.open", new_callable=mock_open)
-    def test_discover_rules_incremental_caching(self, mock_file, mock_exists, mock_run_ruff, mock_scrape):
+    def test_discover_rules_incremental_caching(
+        self, mock_file, mock_exists, mock_run_ruff, mock_scrape
+    ):
         # --- SCENARIO 1: No cache exists, scrape and cache everything ---
         mock_exists.return_value = False
         mock_run_ruff.return_value = json.dumps([
@@ -31,7 +33,8 @@ class TestRuffAdapter(unittest.TestCase):
 
         # Verify final structure
         self.assertIn("pyflakes", rules)
-        self.assertEqual(rules["pyflakes"]["rules"][0]["documentation"], "--- WHAT IT DOES ---\nScraped documentation")
+        doc = rules["pyflakes"]["rules"][0]["documentation"]
+        self.assertEqual(doc, "--- WHAT IT DOES ---\nScraped documentation")
 
         # Verify that the file was opened for writing twice (once per rule)
         self.assertEqual(mock_file.call_count, 2)
@@ -62,8 +65,10 @@ class TestRuffAdapter(unittest.TestCase):
         mock_scrape.assert_called_once_with("Some other rule")
 
         # Verify the final data contains both rules, with old and new docs
-        self.assertEqual(rules["pyflakes"]["rules"][0]["documentation"], "Existing documentation")
-        self.assertEqual(rules["flake8-builtins"]["rules"][0]["documentation"], "--- WHAT IT DOES ---\nScraped documentation")
+        pyflakes_doc = rules["pyflakes"]["rules"][0]["documentation"]
+        builtins_doc = rules["flake8-builtins"]["rules"][0]["documentation"]
+        self.assertEqual(pyflakes_doc, "Existing documentation")
+        self.assertEqual(builtins_doc, "--- WHAT IT DOES ---\nScraped documentation")
 
         # Verify that the file was opened once to read and once to write
         self.assertEqual(mock_file.call_count, 2)
