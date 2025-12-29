@@ -69,69 +69,101 @@ def scrape_rule_documentation(rule_name):
         for section in sections:
             header = content_div.find("h2", string=section)
             if header:
-                doc_parts.append(f"### {section}")
+                # Format as a prominent plain-text header
+                doc_parts.append(f"\n--- {section.upper()} ---")
                 next_node = header.find_next_sibling()
                 while next_node and next_node.name != "h2":
-                    doc_parts.append(next_node.get_text())
+                    # Strip leading/trailing whitespace from each part
+                    text_content = next_node.get_text().strip()
+                    if text_content:
+                        doc_parts.append(text_content)
                     next_node = next_node.find_next_sibling()
 
-        return "\n".join(doc_parts)
+        # Join with newlines, but filter out any empty parts
+        return "\n".join(filter(None, doc_parts)).strip()
 
     except requests.RequestException as e:
         logging.warning(f"Could not fetch documentation for rule {rule_name}: {e}")
         return None
 
-def _fetch_and_process_rules():
-    """Fetches all ruff rules, scrapes their documentation, and categorizes them."""
-    output = _run_ruff_command(["rule", "--all", "--output-format", "json"])
-    rules = json.loads(output)
-
-    categorized_rules = {}
-    for rule in rules:
-        rule['documentation'] = scrape_rule_documentation(rule['name'])
-        if rule.get("deprecated"):
-            rule["status"] = "deprecated"
-        elif rule.get("removed"):
-            rule["status"] = "removed"
-        elif rule.get("preview"):
-            rule["status"] = "preview"
-        else:
-            rule["status"] = "stable"
-
-        category_name = rule.get("linter", "Unknown")
-        if category_name not in categorized_rules:
-            match = re.match(r"[A-Z]+", rule["code"])
-            prefix = match.group(0) if match else ""
-            categorized_rules[category_name] = {"prefix": prefix, "rules": []}
-
-        categorized_rules[category_name]["rules"].append(rule)
-    return categorized_rules
-
-
 def discover_rules():
-    """Discovers and categorizes all ruff rules, with caching."""
+    """
+    Discovers and categorizes all ruff rules, with incremental caching.
+
+    This function fetches the complete list of rules from ruff and then
+    incrementally scrapes and caches the documentation for each rule.
+    If the process is interrupted, it can resume where it left off on the
+    next run.
+    """
     version = get_ruff_version()
     cache_dir = os.path.expanduser("~/.cache/ruff-studio")
     cache_file = os.path.join(cache_dir, f"rules-v{version}-with-docs.json")
 
+    # Load existing cache or initialize a new one
+    categorized_rules = {}
     if os.path.exists(cache_file):
         try:
             with open(cache_file, "r", encoding="utf-8") as f:
-                logging.info(f"Loading rules from cache: {cache_file}")
-                return json.load(f)
+                categorized_rules = json.load(f)
+                logging.info(f"Loaded {len(categorized_rules)} rule categories from cache.")
         except (json.JSONDecodeError, IOError) as e:
-            logging.warning(f"Could not read cache file {cache_file}, fetching fresh rules: {e}")
+            logging.warning(f"Could not read cache file {cache_file}, starting fresh: {e}")
+            categorized_rules = {}
 
-    logging.info("Fetching fresh rules from ruff.")
-    categorized_rules = _fetch_and_process_rules()
+    # Get the definitive list of all rules directly from ruff
+    all_rules_raw = json.loads(_run_ruff_command(["rule", "--all", "--output-format", "json"]))
 
-    try:
-        os.makedirs(cache_dir, exist_ok=True)
-        with open(cache_file, "w", encoding="utf-8") as f:
-            json.dump(categorized_rules, f)
-        logging.info(f"Successfully wrote rules to cache: {cache_file}")
-    except IOError as e:
-        logging.warning(f"Could not write cache file {cache_file}: {e}")
+    # Create a quick lookup for existing rules in the cache
+    cached_rules_lookup = {
+        rule['code']: rule for category in categorized_rules.values() for rule in category.get('rules', [])
+    }
+
+    cache_updated = False
+    for i, rule_data in enumerate(all_rules_raw):
+        # Check if rule is already cached and has documentation
+        if rule_data['code'] in cached_rules_lookup and cached_rules_lookup[rule_data['code']].get('documentation'):
+            continue  # Skip if documentation already exists
+
+        # If not, scrape documentation and update the rule data
+        logging.info(f"Scraping docs for '{rule_data['name']}' ({i+1}/{len(all_rules_raw)})...")
+        rule_data['documentation'] = scrape_rule_documentation(rule_data['name'])
+
+        # Add status field
+        if rule_data.get("deprecated"):
+            rule_data["status"] = "deprecated"
+        elif rule_data.get("removed"):
+            rule_data["status"] = "removed"
+        elif rule_data.get("preview"):
+            rule_data["status"] = "preview"
+        else:
+            rule_data["status"] = "stable"
+
+        # Add the updated rule to the categorized dictionary
+        category_name = rule_data.get("linter", "Unknown")
+        if category_name not in categorized_rules:
+            match = re.match(r"[A-Z]+", rule_data["code"])
+            prefix = match.group(0) if match else ""
+            categorized_rules[category_name] = {"prefix": prefix, "rules": []}
+
+        # Avoid duplicating rules if they are already in the category list
+        category_rules = categorized_rules[category_name]["rules"]
+        if not any(r['code'] == rule_data['code'] for r in category_rules):
+            category_rules.append(rule_data)
+
+        cache_updated = True
+
+        # Write to cache after each new rule is processed
+        try:
+            os.makedirs(cache_dir, exist_ok=True)
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(categorized_rules, f)
+        except IOError as e:
+            logging.warning(f"Could not write to cache file during update: {e}")
+
+    if cache_updated:
+        logging.info("Rule cache is now fully up to date.")
+    else:
+        logging.info("Rule cache was already up to date.")
 
     return categorized_rules
 
