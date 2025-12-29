@@ -297,8 +297,18 @@ class App(ctk.CTk):
                 'rules': {}
             }
 
+            # Add a toggle button for expanding/collapsing rules
+            toggle_button = ctk.CTkButton(
+                category_frame, text="▼", width=20,
+                command=lambda cn=category_name: self.toggle_category_rules(cn)
+            )
+            toggle_button.pack(side="right", padx=5)
+
             rules_container = ctk.CTkFrame(self.rules_frame, fg_color="transparent")
             rules_container.pack(fill="x", padx=(25, 5))
+
+            self.rule_widgets[category_name]['rules_container'] = rules_container
+            self.rule_widgets[category_name]['toggle_button'] = toggle_button
 
             for rule in sorted(category_data['rules'], key=lambda r: r['code']):
                 frame = ctk.CTkFrame(rules_container)
@@ -421,6 +431,16 @@ class App(ctk.CTk):
         self.simulate_button.configure(state="normal")
         self.apply_button.configure(state="normal")
         self.update_category_checkbox_state(category_name)
+
+    def toggle_category_rules(self, category_name):
+        container = self.rule_widgets[category_name]['rules_container']
+        toggle_button = self.rule_widgets[category_name]['toggle_button']
+        if container.winfo_viewable():
+            container.pack_forget()
+            toggle_button.configure(text="►")
+        else:
+            container.pack(fill="x", padx=(25, 5))
+            toggle_button.configure(text="▼")
 
     def update_category_checkbox_state(self, category_name):
         category_widgets = self.rule_widgets[category_name]
