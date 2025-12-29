@@ -5,7 +5,7 @@ import tomlkit
 import threading
 import queue
 import copy
-from . import ruff_adapter, config_manager
+from . import ruff_adapter, config_manager, workspace_analyzer
 
 class Tooltip:
     def __init__(self, widget, text):
@@ -49,6 +49,7 @@ class App(ctk.CTk):
         self.base_scan_results = []
         self.selected_rule_frame = None
 
+        self.analyzer = workspace_analyzer.WorkspaceAnalyzer("ruff_studio.db")
         self.queue = queue.Queue()
 
         # Create main layout
@@ -121,12 +122,10 @@ class App(ctk.CTk):
         except (RuntimeError, FileNotFoundError) as e:
             self.queue.put(("error", e))
 
-    def _run_scan_worker(self, command_name, directory, config=None):
+
+    def _run_full_scan_worker(self, command_name, directory):
         try:
-            if config:
-                results = ruff_adapter.run_scan_with_config(directory, config)
-            else:
-                results = ruff_adapter.run_scan(directory)
+            results = self.analyzer.run_full_scan(directory)
             self.queue.put((command_name, results))
         except (RuntimeError, FileNotFoundError) as e:
             self.queue.put(("error", e))
@@ -153,7 +152,7 @@ class App(ctk.CTk):
                     for cat in self.all_rules.values()
                     for rule in cat['rules']
                 }
-            elif command == "run_scan":
+            elif command == "run_full_scan":
                 self.base_scan_results = data
                 self.update_results_panel(data)
             elif command == "run_simulation":
@@ -167,8 +166,10 @@ class App(ctk.CTk):
         finally:
             self.after(100, self.process_queue)
 
-    def select_directory(self):
-        directory = filedialog.askdirectory()
+    def select_directory(self, directory=None):
+        if not directory:
+            directory = filedialog.askdirectory()
+
         if directory:
             self.current_directory = directory
             self.directory_label.configure(text=directory)
@@ -187,11 +188,11 @@ class App(ctk.CTk):
                     widget.destroy()
             self.results_label.configure(text="Scanning...")
 
-            self.run_in_thread(self._run_scan_worker, "run_scan", directory)
+            self.run_in_thread(self._run_full_scan_worker, "run_full_scan", directory)
             self.update_rules_panel()
 
     def update_results_panel(self, results):
-        self.results_label.configure(text="Scan Results")
+        self.results_label.configure(text=f"Scan Results ({len(results)} violations)")
         for widget in self.results_frame.winfo_children():
             if widget != self.results_label:
                 widget.destroy()
@@ -202,8 +203,8 @@ class App(ctk.CTk):
 
         for result in results:
             result_text = (
-                f"{result['filename']}:{result['location']['row']}:"
-                f"{result['location']['column']} {result['code']} {result['message']}"
+                f"{result.file_path}:{result.line_number}:"
+                f"{result.column} {result.rule_id} {result.message}"
             )
             ctk.CTkLabel(
                 self.results_frame, text=result_text,
@@ -211,6 +212,8 @@ class App(ctk.CTk):
             ).pack(pady=2, anchor="w")
 
     def _make_hashable(self, data):
+        if hasattr(data, '__dict__'):
+            data = data.__dict__
         if isinstance(data, dict):
             return tuple(sorted((k, self._make_hashable(v)) for k, v in data.items()))
         if isinstance(data, list):
@@ -475,7 +478,7 @@ class App(ctk.CTk):
         sim_config_data = self.get_effective_config()
         self.results_label.configure(text="Simulating...")
         self.run_in_thread(
-            self._run_scan_worker, "run_simulation",
+            ruff_adapter.run_scan_with_config, "run_simulation",
             self.current_directory, sim_config_data
         )
 
@@ -496,7 +499,7 @@ class App(ctk.CTk):
         self.apply_button.configure(state="disabled")
 
         self.update_rules_panel()
-        self.run_in_thread(self._run_scan_worker, "run_scan", self.current_directory)
+        self.run_in_thread(self._run_full_scan_worker, "run_full_scan", self.current_directory)
 
     def get_effective_config(self):
         effective_data = copy.deepcopy(self.pyproject_data)
@@ -590,5 +593,8 @@ class App(ctk.CTk):
             ctk.CTkLabel(self.info_frame, text=rule['documentation'], wraplength=250, justify="left").pack(pady=5, anchor="w")
 
 if __name__ == "__main__":
+    import sys
     app = App()
+    if len(sys.argv) > 1:
+        app.select_directory(sys.argv[1])
     app.mainloop()
