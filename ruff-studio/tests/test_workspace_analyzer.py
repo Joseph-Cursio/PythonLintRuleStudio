@@ -45,7 +45,7 @@ class TestWorkspaceAnalyzer(unittest.TestCase):
         self.assertEqual(violations[1].file_path, "/path/to/file2.py")
 
         analyzer._clear_violations.assert_called_once()
-        analyzer._store_violations.assert_called_once_with(violations)
+        analyzer._store_violations.assert_called_once_with(mock_db_conn, violations)
         mock_run_scan.assert_called_once_with("/fake/directory")
 
 if __name__ == '__main__':
