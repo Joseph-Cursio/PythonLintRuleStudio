@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch, mock_open
 import os
 import json
-from ruff_studio.ruff_adapter import discover_rules, run_scan
+from ruff_studio.ruff_adapter import discover_rules, run_scan, get_default_rules
 
 class TestRuffAdapter(unittest.TestCase):
     def setUp(self):
@@ -79,6 +79,23 @@ class TestRuffAdapter(unittest.TestCase):
         self.assertGreater(len(results), 0)
         self.assertEqual(results[0]["code"], "F401")
         self.assertEqual(results[0]["filename"], os.path.abspath(self.test_py_file))
+
+    @patch("ruff_studio.ruff_adapter._run_ruff_command")
+    def test_get_default_rules(self, mock_run_ruff):
+        mock_output = """
+        linter.rules.enabled = [
+            E402,
+            E501,
+            E701,
+            F841,
+            F401,
+        ]
+        """
+        mock_run_ruff.return_value = mock_output
+
+        default_rules = get_default_rules()
+
+        self.assertEqual(default_rules, {"E402", "E501", "E701", "F841", "F401"})
 
 if __name__ == '__main__':
     unittest.main()
