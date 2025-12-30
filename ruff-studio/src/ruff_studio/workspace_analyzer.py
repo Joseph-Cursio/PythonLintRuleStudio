@@ -36,19 +36,18 @@ class WorkspaceAnalyzer:
             db_path (str): The path to the SQLite database.
         """
         self.db_path = db_path
-        self.conn = database_manager.setup_database(self.db_path)
 
-    def _clear_violations(self):
+    def _clear_violations(self, conn):
         """Clears all violations from the database."""
         try:
-            cursor = self.conn.cursor()
+            cursor = conn.cursor()
             cursor.execute("DELETE FROM violations")
-            self.conn.commit()
+            conn.commit()
         except sqlite3.Error as e:
             logging.error(f"Error clearing violations: {e}")
 
 
-    def _store_violations(self, violations: list[UnifiedViolationModel]):
+    def _store_violations(self, conn, violations: list[UnifiedViolationModel]):
         """
         Stores a list of violation objects in the database.
 
@@ -56,13 +55,13 @@ class WorkspaceAnalyzer:
             violations (list[UnifiedViolationModel]): The violations to store.
         """
         try:
-            cursor = self.conn.cursor()
+            cursor = conn.cursor()
             for violation in violations:
                 cursor.execute("""
                     INSERT INTO violations (id, rule_id, file_path, line_number, column, message, timestamp)
                     VALUES (:id, :rule_id, :file_path, :line_number, :column, :message, :timestamp)
                 """, asdict(violation))
-            self.conn.commit()
+            conn.commit()
         except sqlite3.Error as e:
             logging.error(f"Error storing violations: {e}")
 
@@ -76,18 +75,25 @@ class WorkspaceAnalyzer:
         Returns:
             list[UnifiedViolationModel]: A list of violation objects.
         """
-        raw_results = ruff_adapter.run_scan(directory)
-        violations = []
-        for result in raw_results:
-            violation = UnifiedViolationModel(
-                rule_id=result["code"],
-                file_path=result["filename"],
-                line_number=result["location"]["row"],
-                column=result["location"]["column"],
-                message=result["message"],
-            )
-            violations.append(violation)
+        conn = database_manager.setup_database(self.db_path)
+        if conn is None:
+            return []
 
-        self._clear_violations()
-        self._store_violations(violations)
-        return violations
+        try:
+            raw_results = ruff_adapter.run_scan(directory)
+            violations = []
+            for result in raw_results:
+                violation = UnifiedViolationModel(
+                    rule_id=result["code"],
+                    file_path=result["filename"],
+                    line_number=result["location"]["row"],
+                    column=result["location"]["column"],
+                    message=result["message"],
+                )
+                violations.append(violation)
+
+            self._clear_violations(conn)
+            self._store_violations(conn, violations)
+            return violations
+        finally:
+            conn.close()
