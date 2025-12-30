@@ -214,3 +214,31 @@ def run_scan_with_config(directory, config_data):
         return []
     finally:
         os.unlink(temp_config_path)
+
+def get_default_rules():
+    """
+    Determines the default set of enabled rules by running ruff on a dummy file.
+    """
+    with tempfile.TemporaryDirectory() as temp_dir:
+        dummy_file = os.path.join(temp_dir, "dummy.py")
+        with open(dummy_file, "w") as f:
+            f.write("import os")
+
+        try:
+            output = _run_ruff_command(["check", dummy_file, "--show-settings"])
+
+            # Use regex to find the linter.rules.enabled list
+            match = re.search(r"linter\.rules\.enabled = \[\s*([^]]+?)\s*\]", output, re.DOTALL)
+            if not match:
+                return set()
+
+            # Extract the content of the list
+            rules_content = match.group(1)
+
+            # Find all rule codes within the content
+            rule_codes = re.findall(r"\b([A-Z]{1,4}[0-9]{3,4})\b", rules_content)
+
+            return set(rule_codes)
+
+        except (RuntimeError, FileNotFoundError):
+            return set()

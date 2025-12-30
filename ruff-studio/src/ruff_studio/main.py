@@ -43,6 +43,7 @@ class App(ctk.CTk):
         self.current_directory = None
         self.pyproject_path = None
         self.pyproject_data = None
+        self.enabled_rules = set()
         self.all_rules = []
         self.rule_widgets = {}
         self.staged_changes = {}
@@ -180,8 +181,11 @@ class App(ctk.CTk):
 
             if os.path.exists(self.pyproject_path):
                 self.pyproject_data = config_manager.read_pyproject(self.pyproject_path)
+                ruff_config = self.pyproject_data.get("tool", {}).get("ruff", {}).get("lint", {})
+                self.enabled_rules = self._get_rules_from_config(ruff_config)
             else:
                 self.pyproject_data = tomlkit.document()
+                self.enabled_rules = ruff_adapter.get_default_rules()
 
             for widget in self.results_frame.winfo_children():
                 if widget != self.results_label:
@@ -345,29 +349,45 @@ class App(ctk.CTk):
                 )
                 label.bind("<Button-1>", lambda event, r=rule: self.show_rule_info(r))
 
-    def is_rule_enabled(self, rule_code, ruff_config):
+    def _get_rules_from_config(self, ruff_config):
+        """
+        Get the set of enabled rule codes from a ruff config dict.
+        """
         selected_codes = ruff_config.get("select", [])
         ignored_codes = ruff_config.get("ignore", [])
 
-        is_selected = False
-        for selected in selected_codes:
-            if rule_code.startswith(selected):
-                is_selected = True
-                break
-        if not is_selected:
-            return False
+        # This is a simplified version. A more robust solution would
+        # need to handle prefix expansion. For now, we assume codes are explicit.
 
-        is_ignored = False
-        for ignored in ignored_codes:
-            if rule_code.startswith(ignored):
-                is_ignored = True
-                break
-        return not is_ignored
+        enabled = set()
+        all_managed_codes = {
+            rule["code"] for cat in self.all_rules.values() for rule in cat["rules"]
+        }
 
-    def get_effective_rule_state(self, rule_code, ruff_config):
+        for code in all_managed_codes:
+            is_selected = False
+            for selected in selected_codes:
+                if code.startswith(selected):
+                    is_selected = True
+                    break
+
+            if is_selected:
+                is_ignored = False
+                for ignored in ignored_codes:
+                    if code.startswith(ignored):
+                        is_ignored = True
+                        break
+                if not is_ignored:
+                    enabled.add(code)
+        return enabled
+
+    def is_rule_enabled(self, rule_code):
+        return rule_code in self.enabled_rules
+
+    def get_effective_rule_state(self, rule_code):
         if rule_code in self.staged_changes:
             return self.staged_changes[rule_code]
-        return self.is_rule_enabled(rule_code, ruff_config)
+        return self.is_rule_enabled(rule_code)
 
     def update_rules_panel(self):
         if not self.current_directory:
@@ -379,11 +399,6 @@ class App(ctk.CTk):
                     rule_widget['variable'].set("")
             return
 
-        ruff_config = (
-            self.pyproject_data.get("tool", {})
-            .get("ruff", {})
-            .get("lint", {})
-        )
         for category_name, category_widgets in self.rule_widgets.items():
             category_widgets['category_checkbox'].configure(state="normal")
 
@@ -392,7 +407,7 @@ class App(ctk.CTk):
 
             for rule_code, rule_widget in category_widgets['rules'].items():
                 rule_widget['checkbox'].configure(state="normal")
-                is_enabled = self.get_effective_rule_state(rule_code, ruff_config)
+                is_enabled = self.get_effective_rule_state(rule_code)
 
                 if is_enabled:
                     rule_widget['variable'].set(rule_code)
@@ -447,17 +462,12 @@ class App(ctk.CTk):
 
     def update_category_checkbox_state(self, category_name):
         category_widgets = self.rule_widgets[category_name]
-        ruff_config = (
-            self.pyproject_data.get("tool", {})
-            .get("ruff", {})
-            .get("lint", {})
-        )
 
         all_rules_on = True
         any_rule_on = False
 
         for rule_code, rule_widget in category_widgets['rules'].items():
-            if self.get_effective_rule_state(rule_code, ruff_config):
+            if self.get_effective_rule_state(rule_code):
                 any_rule_on = True
             else:
                 all_rules_on = False
