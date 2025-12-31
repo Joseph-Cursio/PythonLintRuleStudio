@@ -65,13 +65,15 @@ class App(ctk.CTk):
         # Create main layout
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=2)
-        self.grid_columnconfigure(1, weight=2)
-        self.grid_columnconfigure(2, weight=3)
+        self.grid_columnconfigure(1, weight=0) # Sash
+        self.grid_columnconfigure(2, weight=2)
+        self.grid_columnconfigure(3, weight=0) # Sash
+        self.grid_columnconfigure(4, weight=3)
 
         # --- Top Bar ---
         self.top_frame = ctk.CTkFrame(self, height=50)
         self.top_frame.grid(
-            row=0, column=0, columnspan=3, sticky="ew", padx=10, pady=10
+            row=0, column=0, columnspan=5, sticky="ew", padx=10, pady=10
         )
 
         self.select_button = ctk.CTkButton(
@@ -106,14 +108,55 @@ class App(ctk.CTk):
         self.rules_label.pack(pady=10)
 
         self.info_frame = ctk.CTkScrollableFrame(self)
-        self.info_frame.grid(row=1, column=1, sticky="nsew", padx=10, pady=0)
+        self.info_frame.grid(row=1, column=2, sticky="nsew", padx=10, pady=0)
         self.info_label = ctk.CTkLabel(self.info_frame, text="Rule Info")
         self.info_label.pack(pady=10)
 
         self.results_frame = ctk.CTkScrollableFrame(self)
-        self.results_frame.grid(row=1, column=2, sticky="nsew", padx=0, pady=0)
+        self.results_frame.grid(row=1, column=4, sticky="nsew", padx=0, pady=0)
         self.results_label = ctk.CTkLabel(self.results_frame, text="Scan Results")
         self.results_label.pack(pady=10)
+
+        # --- Sashes for resizing ---
+        self.sash1 = ctk.CTkFrame(self, width=4, cursor="sb_h_double_arrow")
+        self.sash1.grid(row=1, column=1, sticky="ns")
+        self.sash1.bind("<Button-1>", lambda e: self.start_resize(e, 0))
+        self.sash1.bind("<B1-Motion>", self.do_resize)
+
+        self.sash2 = ctk.CTkFrame(self, width=4, cursor="sb_h_double_arrow")
+        self.sash2.grid(row=1, column=3, sticky="ns")
+        self.sash2.bind("<Button-1>", lambda e: self.start_resize(e, 2))
+        self.sash2.bind("<B1-Motion>", self.do_resize)
+
+        self.resize_start_x = 0
+        self.resize_start_col = 0
+
+    def start_resize(self, event, col):
+        self.resize_start_x = event.x_root
+        self.resize_start_col = col
+
+    def do_resize(self, event):
+        delta = event.x_root - self.resize_start_x
+
+        # Adjust column weights
+        weight0 = self.grid_columnconfigure(0)['weight']
+        weight2 = self.grid_columnconfigure(2)['weight']
+        weight4 = self.grid_columnconfigure(4)['weight']
+
+        total_weight = weight0 + weight2 + weight4
+
+        if self.resize_start_col == 0:
+            new_weight0 = max(1, weight0 + delta)
+            new_weight2 = max(1, weight2 - delta)
+            self.grid_columnconfigure(0, weight=new_weight0)
+            self.grid_columnconfigure(2, weight=new_weight2)
+        else: # col == 2
+            new_weight2 = max(1, weight2 + delta)
+            new_weight4 = max(1, weight4 - delta)
+            self.grid_columnconfigure(2, weight=new_weight2)
+            self.grid_columnconfigure(4, weight=new_weight4)
+
+        self.resize_start_x = event.x_root
 
 
     def run_in_thread(self, worker, command_name, *args):
@@ -295,6 +338,10 @@ class App(ctk.CTk):
             effective_state_indicator = ctk.CTkCheckBox(category_frame, text="", variable=effective_state_var, onvalue="on", offvalue="off", state="disabled")
             effective_state_indicator.pack(side="left", padx=(0, 5))
 
+            # Radio buttons for category
+            radio_frame = ctk.CTkFrame(category_frame, fg_color="transparent")
+            radio_frame.pack(side="left", padx=10)
+
             category_label = ctk.CTkLabel(category_frame, text=f"{category_name} ({category_data['prefix']})", anchor="w")
             category_label.pack(side="left", fill="x", expand=True)
 
@@ -303,10 +350,6 @@ class App(ctk.CTk):
                 command=lambda cn=category_name: self.toggle_category_rules(cn)
             )
             toggle_button.pack(side="right", padx=5)
-
-            # Radio buttons for category
-            radio_frame = ctk.CTkFrame(category_frame, fg_color="transparent")
-            radio_frame.pack(side="right", padx=10)
             radio_var = ctk.StringVar(value="default")
 
             select_rb = ctk.CTkRadioButton(radio_frame, text="Select", variable=radio_var, value="select", command=lambda p=category_data['prefix']: self.stage_category_change(p, "select"))
@@ -345,12 +388,12 @@ class App(ctk.CTk):
                 if rule['status'] != 'stable':
                     rule_text += f" (⚠️ {rule['status']})"
 
-                label = ctk.CTkLabel(frame, text=f"{rule_text}: {rule['name']}", anchor="w")
-                label.pack(side="left", fill="x", expand=True, padx=5)
-
                 # Radio buttons for the rule
                 rule_radio_frame = ctk.CTkFrame(frame, fg_color="transparent")
-                rule_radio_frame.pack(side="right", padx=10)
+                rule_radio_frame.pack(side="left", padx=10)
+
+                label = ctk.CTkLabel(frame, text=f"{rule_text}: {rule['name']}", anchor="w")
+                label.pack(side="left", fill="x", expand=True, padx=5)
                 rule_radio_var = ctk.StringVar(value="default")
 
                 rule_select_rb = ctk.CTkRadioButton(rule_radio_frame, text="Select", variable=rule_radio_var, value="select", command=lambda rc=rule['code']: self.stage_rule_change(rc, "select"))
@@ -616,11 +659,6 @@ class App(ctk.CTk):
                 self.info_frame, text=rule['documentation'],
                 wraplength=250, justify="left"
             ).pack(pady=5, anchor="w")
-
-        if rule.get('documentation'):
-            ctk.CTkLabel(self.info_frame, text="─" * 40).pack(pady=5)
-            ctk.CTkLabel(self.info_frame, text=f"Documentation:", justify="left").pack(pady=5, anchor="w")
-            ctk.CTkLabel(self.info_frame, text=rule['documentation'], wraplength=250, justify="left").pack(pady=5, anchor="w")
 
 if __name__ == "__main__":
     import sys
