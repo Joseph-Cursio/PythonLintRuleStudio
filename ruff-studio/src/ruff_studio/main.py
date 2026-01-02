@@ -404,6 +404,19 @@ class App(ctk.CTk):
                 rule_ignore_rb.pack(side="left", padx=5)
                 rule_default_rb.pack(side="left", padx=5)
 
+                # Radio buttons for the rule
+                rule_radio_frame = ctk.CTkFrame(frame, fg_color="transparent")
+                rule_radio_frame.pack(side="right", padx=10)
+                rule_radio_var = ctk.StringVar(value="default")
+
+                rule_select_rb = ctk.CTkRadioButton(rule_radio_frame, text="Select", variable=rule_radio_var, value="select", command=lambda rc=rule['code']: self.stage_rule_change(rc, "select"))
+                rule_ignore_rb = ctk.CTkRadioButton(rule_radio_frame, text="Ignore", variable=rule_radio_var, value="ignore", command=lambda rc=rule['code']: self.stage_rule_change(rc, "ignore"))
+                rule_default_rb = ctk.CTkRadioButton(rule_radio_frame, text="Default", variable=rule_radio_var, value="default", command=lambda rc=rule['code']: self.stage_rule_change(rc, "default"))
+
+                rule_select_rb.pack(side="left", padx=5)
+                rule_ignore_rb.pack(side="left", padx=5)
+                rule_default_rb.pack(side="left", padx=5)
+
                 if rule['status'] != 'stable':
                     Tooltip(label, f"This rule is {rule['status']}.")
 
