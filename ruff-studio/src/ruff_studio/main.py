@@ -338,9 +338,6 @@ class App(ctk.CTk):
             effective_state_indicator = ctk.CTkCheckBox(category_frame, text="", variable=effective_state_var, onvalue="on", offvalue="off", state="disabled")
             effective_state_indicator.pack(side="left", padx=(0, 5))
 
-            # Radio buttons for category
-            radio_frame = ctk.CTkFrame(category_frame, fg_color="transparent")
-            radio_frame.pack(side="left", padx=10)
 
             category_label = ctk.CTkLabel(category_frame, text=f"{category_name} ({category_data['prefix']})", anchor="w")
             category_label.pack(side="left", fill="x", expand=True)
@@ -350,6 +347,10 @@ class App(ctk.CTk):
                 command=lambda cn=category_name: self.toggle_category_rules(cn)
             )
             toggle_button.pack(side="right", padx=5)
+
+            # Radio buttons for category
+            radio_frame = ctk.CTkFrame(category_frame, fg_color="transparent")
+            radio_frame.pack(side="left", padx=10)
             radio_var = ctk.StringVar(value="default")
 
             select_rb = ctk.CTkRadioButton(radio_frame, text="Select", variable=radio_var, value="select", command=lambda p=category_data['prefix']: self.stage_category_change(p, "select"))
@@ -388,25 +389,13 @@ class App(ctk.CTk):
                 if rule['status'] != 'stable':
                     rule_text += f" (⚠️ {rule['status']})"
 
-                # Radio buttons for the rule
-                rule_radio_frame = ctk.CTkFrame(frame, fg_color="transparent")
-                rule_radio_frame.pack(side="left", padx=10)
 
                 label = ctk.CTkLabel(frame, text=f"{rule_text}: {rule['name']}", anchor="w")
                 label.pack(side="left", fill="x", expand=True, padx=5)
-                rule_radio_var = ctk.StringVar(value="default")
-
-                rule_select_rb = ctk.CTkRadioButton(rule_radio_frame, text="Select", variable=rule_radio_var, value="select", command=lambda rc=rule['code']: self.stage_rule_change(rc, "select"))
-                rule_ignore_rb = ctk.CTkRadioButton(rule_radio_frame, text="Ignore", variable=rule_radio_var, value="ignore", command=lambda rc=rule['code']: self.stage_rule_change(rc, "ignore"))
-                rule_default_rb = ctk.CTkRadioButton(rule_radio_frame, text="Default", variable=rule_radio_var, value="default", command=lambda rc=rule['code']: self.stage_rule_change(rc, "default"))
-
-                rule_select_rb.pack(side="left", padx=5)
-                rule_ignore_rb.pack(side="left", padx=5)
-                rule_default_rb.pack(side="left", padx=5)
 
                 # Radio buttons for the rule
                 rule_radio_frame = ctk.CTkFrame(frame, fg_color="transparent")
-                rule_radio_frame.pack(side="right", padx=10)
+                rule_radio_frame.pack(side="left", padx=10)
                 rule_radio_var = ctk.StringVar(value="default")
 
                 rule_select_rb = ctk.CTkRadioButton(rule_radio_frame, text="Select", variable=rule_radio_var, value="select", command=lambda rc=rule['code']: self.stage_rule_change(rc, "select"))
@@ -663,15 +652,6 @@ class App(ctk.CTk):
             wraplength=250, justify="left"
         ).pack(pady=5, anchor="w")
 
-        if rule.get('documentation'):
-            ctk.CTkLabel(self.info_frame, text="─" * 40).pack(pady=5)
-            ctk.CTkLabel(
-                self.info_frame, text="Documentation:", justify="left"
-            ).pack(pady=5, anchor="w")
-            ctk.CTkLabel(
-                self.info_frame, text=rule['documentation'],
-                wraplength=250, justify="left"
-            ).pack(pady=5, anchor="w")
 
 if __name__ == "__main__":
     import sys
