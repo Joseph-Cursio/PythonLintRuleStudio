@@ -53,6 +53,8 @@ class App(ctk.CTk):
         self.staged_changes = {}
         self.base_scan_results = []
         self.selected_rule_frame = None
+        self.selected_rule_info = None
+        self.sorted_rules = []
 
         self.analyzer = workspace_analyzer.WorkspaceAnalyzer("ruff_studio.db")
         self.queue = queue.Queue()
@@ -130,6 +132,9 @@ class App(ctk.CTk):
 
         self.resize_start_x = 0
         self.resize_start_col = 0
+
+        self.bind("<Up>", self.navigate_rules)
+        self.bind("<Down>", self.navigate_rules)
 
     def start_resize(self, event, col):
         self.resize_start_x = event.x_root
@@ -328,6 +333,12 @@ class App(ctk.CTk):
 
     def populate_rules_initial(self):
         sorted_categories = sorted(self.all_rules.items())
+
+        # Create a flat, sorted list of all rules for navigation
+        all_rules_flat = []
+        for _, category_data in sorted_categories:
+            all_rules_flat.extend(category_data['rules'])
+        self.sorted_rules = sorted(all_rules_flat, key=lambda r: r['code'])
 
         for category_name, category_data in sorted_categories:
             # --- Category Header ---
@@ -618,7 +629,28 @@ class App(ctk.CTk):
         ruff_config["ignore"] = sorted(list(final_ignore))
         return ruff_config
 
+    def navigate_rules(self, event):
+        if not self.selected_rule_info or not self.sorted_rules:
+            return
+
+        try:
+            current_index = self.sorted_rules.index(self.selected_rule_info)
+        except ValueError:
+            return # Current selection not in the navigable list
+
+        if event.keysym == "Up":
+            next_index = max(0, current_index - 1)
+        elif event.keysym == "Down":
+            next_index = min(len(self.sorted_rules) - 1, current_index + 1)
+        else:
+            return
+
+        if next_index != current_index:
+            next_rule = self.sorted_rules[next_index]
+            self.show_rule_info(next_rule)
+
     def show_rule_info(self, rule):
+        self.selected_rule_info = rule
         # Reset the previously selected rule's background color
         if self.selected_rule_frame:
             self.selected_rule_frame.configure(fg_color="transparent")

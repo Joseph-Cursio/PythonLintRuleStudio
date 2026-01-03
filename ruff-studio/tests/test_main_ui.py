@@ -1,6 +1,6 @@
 import pytest
 from src.ruff_studio.main import App
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 MOCK_RULES = {
     "Pyflakes": {
@@ -77,3 +77,56 @@ def test_toggle_category_rules(app):
     # The container should be visible again, restoring the initial state.
     assert rules_container.winfo_viewable() == 1
     assert toggle_button.cget("text") == "▼"
+
+def test_rule_navigation_with_arrow_keys(app):
+    """
+    Tests that the user can navigate between rules using the Up and Down arrow keys.
+    """
+    # The flat list of rules should be sorted by code: E501, F401, F841
+    assert [r['code'] for r in app.sorted_rules] == ["E501", "F401", "F841"]
+
+    # --- 1. Initial Selection ---
+    # Start by selecting the middle rule, F401, to test both up and down navigation.
+    initial_rule_info = app.sorted_rules[1]
+    app.show_rule_info(initial_rule_info)
+    app.update_idletasks()
+    assert app.selected_rule_info['code'] == "F401"
+
+    # --- 2. Navigate Down ---
+    # Simulate a "Down" arrow key press.
+    # We create a mock event object with the required `keysym` attribute.
+    down_event = MagicMock()
+    down_event.keysym = "Down"
+    app.navigate_rules(down_event)
+    app.update_idletasks()
+
+    # The selection should move to the next rule in the list, F841.
+    assert app.selected_rule_info['code'] == "F841"
+
+    # --- 3. Navigate Down again (Boundary Check) ---
+    # Pressing "Down" at the last rule should not change the selection.
+    app.navigate_rules(down_event)
+    app.update_idletasks()
+    assert app.selected_rule_info['code'] == "F841"
+
+    # --- 4. Navigate Up ---
+    # Simulate an "Up" arrow key press.
+    up_event = MagicMock()
+    up_event.keysym = "Up"
+    app.navigate_rules(up_event)
+    app.update_idletasks()
+
+    # The selection should move back to the previous rule, F401.
+    assert app.selected_rule_info['code'] == "F401"
+
+    # --- 5. Navigate Up again ---
+    # Pressing "Up" again should move to the first rule, E501.
+    app.navigate_rules(up_event)
+    app.update_idletasks()
+    assert app.selected_rule_info['code'] == "E501"
+
+    # --- 6. Navigate Up again (Boundary Check) ---
+    # Pressing "Up" at the first rule should not change the selection.
+    app.navigate_rules(up_event)
+    app.update_idletasks()
+    assert app.selected_rule_info['code'] == "E501"
