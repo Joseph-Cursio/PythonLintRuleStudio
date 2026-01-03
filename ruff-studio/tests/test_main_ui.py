@@ -78,55 +78,82 @@ def test_toggle_category_rules(app):
     assert rules_container.winfo_viewable() == 1
     assert toggle_button.cget("text") == "▼"
 
-def test_rule_navigation_with_arrow_keys(app):
+def test_visual_keyboard_navigation(app):
     """
-    Tests that the user can navigate between rules using the Up and Down arrow keys.
+    Tests that keyboard navigation follows the visual order of the UI,
+    including navigating between rules and category headers.
     """
-    # The flat list of rules should be sorted by code: E501, F401, F841
-    assert [r['code'] for r in app.sorted_rules] == ["E501", "F401", "F841"]
+    # --- 1. Verify Navigation Order ---
+    # The navigable list should contain categories and their rules in order.
+    # Mock data is sorted by category name ("Pyflakes", "pycodestyle"),
+    # and rules within are sorted by code ("F401", "F841").
+    nav_item_reprs = []
+    for item in app.navigable_items:
+        if item['type'] == 'category':
+            nav_item_reprs.append(f"CAT:{item['name']}")
+        else:
+            nav_item_reprs.append(f"RULE:{item['data']['code']}")
 
-    # --- 1. Initial Selection ---
-    # Start by selecting the middle rule, F401, to test both up and down navigation.
-    initial_rule_info = app.sorted_rules[1]
-    app.show_rule_info(initial_rule_info)
-    app.update_idletasks()
-    assert app.selected_rule_info['code'] == "F401"
+    expected_order = [
+        "CAT:Pyflakes", "RULE:F401", "RULE:F841",
+        "CAT:pycodestyle", "RULE:E501"
+    ]
+    assert nav_item_reprs == expected_order
 
-    # --- 2. Navigate Down ---
-    # Simulate a "Down" arrow key press.
-    # We create a mock event object with the required `keysym` attribute.
-    down_event = MagicMock()
-    down_event.keysym = "Down"
-    app.navigate_rules(down_event)
-    app.update_idletasks()
-
-    # The selection should move to the next rule in the list, F841.
-    assert app.selected_rule_info['code'] == "F841"
-
-    # --- 3. Navigate Down again (Boundary Check) ---
-    # Pressing "Down" at the last rule should not change the selection.
-    app.navigate_rules(down_event)
-    app.update_idletasks()
-    assert app.selected_rule_info['code'] == "F841"
-
-    # --- 4. Navigate Up ---
-    # Simulate an "Up" arrow key press.
     up_event = MagicMock()
     up_event.keysym = "Up"
-    app.navigate_rules(up_event)
-    app.update_idletasks()
+    down_event = MagicMock()
+    down_event.keysym = "Down"
 
-    # The selection should move back to the previous rule, F401.
-    assert app.selected_rule_info['code'] == "F401"
-
-    # --- 5. Navigate Up again ---
-    # Pressing "Up" again should move to the first rule, E501.
-    app.navigate_rules(up_event)
+    # --- 2. Start Selection ---
+    # Start by selecting the first rule, F401.
+    app.show_rule_info(app.navigable_items[1]['data'], app.navigable_items[1]['category_name'])
     app.update_idletasks()
-    assert app.selected_rule_info['code'] == "E501"
+    assert app.selected_item['data']['code'] == 'F401'
 
-    # --- 6. Navigate Up again (Boundary Check) ---
-    # Pressing "Up" at the first rule should not change the selection.
-    app.navigate_rules(up_event)
+    # --- 3. Navigate Up to Category ---
+    # Pressing Up from the first rule should select its category header.
+    app.navigate_items(up_event)
     app.update_idletasks()
-    assert app.selected_rule_info['code'] == "E501"
+    assert app.selected_item['type'] == 'category'
+    assert app.selected_item['name'] == 'Pyflakes'
+
+    # --- 4. Boundary Check (Top) ---
+    # Pressing Up again should not change the selection.
+    app.navigate_items(up_event)
+    app.update_idletasks()
+    assert app.selected_item['name'] == 'Pyflakes'
+
+    # --- 5. Navigate Down to First Rule ---
+    app.navigate_items(down_event)
+    app.update_idletasks()
+    assert app.selected_item['data']['code'] == 'F401'
+
+    # --- 6. Navigate Down to Second Rule ---
+    app.navigate_items(down_event)
+    app.update_idletasks()
+    assert app.selected_item['data']['code'] == 'F841'
+
+    # --- 7. Navigate Down to Next Category ---
+    # Pressing Down from the last rule in a category should select the next category.
+    app.navigate_items(down_event)
+    app.update_idletasks()
+    assert app.selected_item['type'] == 'category'
+    assert app.selected_item['name'] == 'pycodestyle'
+
+    # --- 8. Navigate Down to Rule in New Category ---
+    app.navigate_items(down_event)
+    app.update_idletasks()
+    assert app.selected_item['data']['code'] == 'E501'
+
+    # --- 9. Boundary Check (Bottom) ---
+    # Pressing Down at the very end should not change the selection.
+    app.navigate_items(down_event)
+    app.update_idletasks()
+    assert app.selected_item['data']['code'] == 'E501'
+
+    # --- 10. Navigate Up to Category from Rule ---
+    app.navigate_items(up_event)
+    app.update_idletasks()
+    assert app.selected_item['type'] == 'category'
+    assert app.selected_item['name'] == 'pycodestyle'

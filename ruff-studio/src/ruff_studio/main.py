@@ -53,8 +53,9 @@ class App(ctk.CTk):
         self.staged_changes = {}
         self.base_scan_results = []
         self.selected_rule_frame = None
-        self.selected_rule_info = None
-        self.sorted_rules = []
+        self.selected_category_frame = None
+        self.selected_item = None
+        self.navigable_items = []
 
         self.analyzer = workspace_analyzer.WorkspaceAnalyzer("ruff_studio.db")
         self.queue = queue.Queue()
@@ -133,8 +134,8 @@ class App(ctk.CTk):
         self.resize_start_x = 0
         self.resize_start_col = 0
 
-        self.bind("<Up>", self.navigate_rules)
-        self.bind("<Down>", self.navigate_rules)
+        self.bind("<Up>", self.navigate_items)
+        self.bind("<Down>", self.navigate_items)
 
     def start_resize(self, event, col):
         self.resize_start_x = event.x_root
@@ -334,16 +335,25 @@ class App(ctk.CTk):
     def populate_rules_initial(self):
         sorted_categories = sorted(self.all_rules.items())
 
-        # Create a flat, sorted list of all rules for navigation
-        all_rules_flat = []
-        for _, category_data in sorted_categories:
-            all_rules_flat.extend(category_data['rules'])
-        self.sorted_rules = sorted(all_rules_flat, key=lambda r: r['code'])
+        # Create a list of navigable items (categories and rules) in display order
+        self.navigable_items = []
+        for category_name, category_data in sorted_categories:
+            category_item = {'type': 'category', 'name': category_name, 'data': category_data}
+            self.navigable_items.append(category_item)
+            sorted_rules = sorted(category_data['rules'], key=lambda r: r['code'])
+            for rule in sorted_rules:
+                rule_item = {'type': 'rule', 'data': rule, 'category_name': category_name}
+                self.navigable_items.append(rule_item)
+
 
         for category_name, category_data in sorted_categories:
             # --- Category Header ---
             category_frame = ctk.CTkFrame(self.rules_frame)
             category_frame.pack(fill="x", pady=(5, 1), padx=5)
+
+            # Allow the category header itself to be selected
+            category_frame.bind("<Button-1>", lambda event, cn=category_name: self.select_category(cn))
+
 
             effective_state_var = ctk.StringVar()
             toggle_button = ctk.CTkButton(
@@ -420,7 +430,7 @@ class App(ctk.CTk):
                 if rule['status'] != 'stable':
                     Tooltip(label, f"This rule is {rule['status']}.")
 
-                label.bind("<Button-1>", lambda event, r=rule: self.show_rule_info(r))
+                label.bind("<Button-1>", lambda event, r=rule, cn=category_name: self.show_rule_info(r, cn))
 
                 rule_widget_data = {
                     'effective_state_indicator': rule_effective_indicator,
@@ -629,40 +639,80 @@ class App(ctk.CTk):
         ruff_config["ignore"] = sorted(list(final_ignore))
         return ruff_config
 
-    def navigate_rules(self, event):
-        if not self.selected_rule_info or not self.sorted_rules:
+    def navigate_items(self, event):
+        if not self.selected_item or not self.navigable_items:
             return
 
         try:
-            current_index = self.sorted_rules.index(self.selected_rule_info)
+            current_index = self.navigable_items.index(self.selected_item)
         except ValueError:
-            return # Current selection not in the navigable list
+            return # Should not happen if selection is managed properly
 
         if event.keysym == "Up":
             next_index = max(0, current_index - 1)
         elif event.keysym == "Down":
-            next_index = min(len(self.sorted_rules) - 1, current_index + 1)
+            next_index = min(len(self.navigable_items) - 1, current_index + 1)
         else:
             return
 
         if next_index != current_index:
-            next_rule = self.sorted_rules[next_index]
-            self.show_rule_info(next_rule)
+            next_item = self.navigable_items[next_index]
+            if next_item['type'] == 'rule':
+                self.show_rule_info(next_item['data'], next_item['category_name'])
+            elif next_item['type'] == 'category':
+                self.select_category(next_item['name'])
 
-    def show_rule_info(self, rule):
-        self.selected_rule_info = rule
-        # Reset the previously selected rule's background color
+    def select_category(self, category_name):
+        # Find the full item from the navigable list
+        selected_nav_item = None
+        for item in self.navigable_items:
+            if item['type'] == 'category' and item['name'] == category_name:
+                selected_nav_item = item
+                break
+        self.selected_item = selected_nav_item
+
+        # Reset any previously selected frames
         if self.selected_rule_frame:
             self.selected_rule_frame.configure(fg_color="transparent")
+        if self.selected_category_frame:
+            self.selected_category_frame.configure(fg_color="transparent")
+
+        # Highlight the new selected category
+        if category_name in self.rule_widgets:
+            self.selected_category_frame = self.rule_widgets[category_name]['category_frame']
+            self.selected_category_frame.configure(fg_color="lightblue")
+
+        # Clear the info panel
+        for widget in self.info_frame.winfo_children():
+            if widget != self.info_label:
+                widget.destroy()
+        self.info_label.configure(text="Rule Info")
+
+
+    def show_rule_info(self, rule, category_name=None):
+        # Find the full item from the navigable list
+        selected_nav_item = None
+        for item in self.navigable_items:
+            if item['type'] == 'rule' and item['data'] == rule:
+                selected_nav_item = item
+                break
+        self.selected_item = selected_nav_item
+
+        # Reset any previously selected frames
+        if self.selected_rule_frame:
+            self.selected_rule_frame.configure(fg_color="transparent")
+        if self.selected_category_frame:
+            self.selected_category_frame.configure(fg_color="transparent")
 
         # Highlight the new selected rule
         rule_code = rule['code']
-        category_name = rule.get("linter", "Unknown")
+        category_name_for_widget = category_name or selected_nav_item.get('category_name')
 
-        if (category_name in self.rule_widgets and
-                rule_code in self.rule_widgets[category_name]['rules']):
+
+        if (category_name_for_widget in self.rule_widgets and
+                rule_code in self.rule_widgets[category_name_for_widget]['rules']):
             self.selected_rule_frame = (
-                self.rule_widgets[category_name]['rules'][rule_code]['frame']
+                self.rule_widgets[category_name_for_widget]['rules'][rule_code]['frame']
             )
             self.selected_rule_frame.configure(fg_color="lightblue")
 
