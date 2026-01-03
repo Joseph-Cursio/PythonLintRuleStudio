@@ -366,12 +366,12 @@ class App(ctk.CTk):
             effective_state_indicator.pack(side="left", padx=(0, 5))
 
 
-            category_label = ctk.CTkLabel(category_frame, text=f"{category_name} ({category_data['prefix']})", anchor="w")
-            category_label.pack(side="left", fill="x", expand=True)
-
             # Radio buttons for category
             radio_frame = ctk.CTkFrame(category_frame, fg_color="transparent")
-            radio_frame.pack(side="right", padx=10)
+            radio_frame.pack(side="left", padx=10)
+
+            category_label = ctk.CTkLabel(category_frame, text=f"{category_name} ({category_data['prefix']})", anchor="w")
+            category_label.pack(side="left", fill="x", expand=True)
             radio_var = ctk.StringVar(value="default")
 
             select_rb = ctk.CTkRadioButton(radio_frame, text="Select", variable=radio_var, value="select", command=lambda p=category_data['prefix']: self.stage_category_change(p, "select"))
@@ -411,12 +411,12 @@ class App(ctk.CTk):
                     rule_text += f" (⚠️ {rule['status']})"
 
 
-                label = ctk.CTkLabel(frame, text=f"{rule_text}: {rule['name']}", anchor="w")
-                label.pack(side="left", fill="x", expand=True, padx=5)
-
                 # Radio buttons for the rule
                 rule_radio_frame = ctk.CTkFrame(frame, fg_color="transparent")
                 rule_radio_frame.pack(side="left", padx=10)
+
+                label = ctk.CTkLabel(frame, text=f"{rule_text}: {rule['name']}", anchor="w")
+                label.pack(side="left", fill="x", expand=True, padx=5)
                 rule_radio_var = ctk.StringVar(value="default")
 
                 rule_select_rb = ctk.CTkRadioButton(rule_radio_frame, text="Select", variable=rule_radio_var, value="select", command=lambda rc=rule['code']: self.stage_rule_change(rc, "select"))
