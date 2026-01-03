@@ -2,18 +2,19 @@ import pytest
 from src.ruff_studio.main import App
 from unittest.mock import patch, MagicMock
 
+# MOCK_RULES is now intentionally non-alphabetical to test display order.
 MOCK_RULES = {
+    "pycodestyle": {
+        "prefix": "E",
+        "rules": [
+            {"code": "E501", "name": "LineTooLong", "summary": "Line too long.", "fix": False, "status": "stable"},
+        ],
+    },
     "Pyflakes": {
         "prefix": "F",
         "rules": [
             {"code": "F401", "name": "UnusedImport", "summary": "An imported module is not used.", "fix": True, "status": "stable"},
             {"code": "F841", "name": "UnusedLocalVariable", "summary": "A local variable is assigned to but never used.", "fix": False, "status": "stable"},
-        ],
-    },
-    "pycodestyle": {
-        "prefix": "E",
-        "rules": [
-            {"code": "E501", "name": "LineTooLong", "summary": "Line too long.", "fix": False, "status": "stable"},
         ],
     },
 }
@@ -84,9 +85,8 @@ def test_visual_keyboard_navigation(app):
     including navigating between rules and category headers.
     """
     # --- 1. Verify Navigation Order ---
-    # The navigable list should contain categories and their rules in order.
-    # Mock data is sorted by category name ("Pyflakes", "pycodestyle"),
-    # and rules within are sorted by code ("F401", "F841").
+    # The navigable list should contain categories and their rules in their
+    # natural (non-alphabetical) display order.
     nav_item_reprs = []
     for item in app.navigable_items:
         if item['type'] == 'category':
@@ -95,8 +95,8 @@ def test_visual_keyboard_navigation(app):
             nav_item_reprs.append(f"RULE:{item['data']['code']}")
 
     expected_order = [
+        "CAT:pycodestyle", "RULE:E501",
         "CAT:Pyflakes", "RULE:F401", "RULE:F841",
-        "CAT:pycodestyle", "RULE:E501"
     ]
     assert nav_item_reprs == expected_order
 
@@ -106,54 +106,59 @@ def test_visual_keyboard_navigation(app):
     down_event.keysym = "Down"
 
     # --- 2. Start Selection ---
-    # Start by selecting the first rule, F401.
+    # Start by selecting the first rule, E501.
     app.show_rule_info(app.navigable_items[1]['data'], app.navigable_items[1]['category_name'])
     app.update_idletasks()
-    assert app.selected_item['data']['code'] == 'F401'
+    assert app.selected_item['data']['code'] == 'E501'
 
     # --- 3. Navigate Up to Category ---
     # Pressing Up from the first rule should select its category header.
     app.navigate_items(up_event)
     app.update_idletasks()
     assert app.selected_item['type'] == 'category'
-    assert app.selected_item['name'] == 'Pyflakes'
+    assert app.selected_item['name'] == 'pycodestyle'
 
     # --- 4. Boundary Check (Top) ---
     # Pressing Up again should not change the selection.
     app.navigate_items(up_event)
     app.update_idletasks()
-    assert app.selected_item['name'] == 'Pyflakes'
+    assert app.selected_item['name'] == 'pycodestyle'
 
     # --- 5. Navigate Down to First Rule ---
     app.navigate_items(down_event)
     app.update_idletasks()
-    assert app.selected_item['data']['code'] == 'F401'
+    assert app.selected_item['data']['code'] == 'E501'
 
-    # --- 6. Navigate Down to Second Rule ---
-    app.navigate_items(down_event)
-    app.update_idletasks()
-    assert app.selected_item['data']['code'] == 'F841'
-
-    # --- 7. Navigate Down to Next Category ---
+    # --- 6. Navigate Down to Next Category ---
     # Pressing Down from the last rule in a category should select the next category.
     app.navigate_items(down_event)
     app.update_idletasks()
     assert app.selected_item['type'] == 'category'
-    assert app.selected_item['name'] == 'pycodestyle'
+    assert app.selected_item['name'] == 'Pyflakes'
 
-    # --- 8. Navigate Down to Rule in New Category ---
+    # --- 7. Navigate Down to Rule in New Category ---
     app.navigate_items(down_event)
     app.update_idletasks()
-    assert app.selected_item['data']['code'] == 'E501'
+    assert app.selected_item['data']['code'] == 'F401'
+
+    # --- 8. Navigate Down to Second Rule in Category ---
+    app.navigate_items(down_event)
+    app.update_idletasks()
+    assert app.selected_item['data']['code'] == 'F841'
 
     # --- 9. Boundary Check (Bottom) ---
     # Pressing Down at the very end should not change the selection.
     app.navigate_items(down_event)
     app.update_idletasks()
-    assert app.selected_item['data']['code'] == 'E501'
+    assert app.selected_item['data']['code'] == 'F841'
 
-    # --- 10. Navigate Up to Category from Rule ---
+    # --- 10. Navigate Up to First Rule in Category ---
+    app.navigate_items(up_event)
+    app.update_idletasks()
+    assert app.selected_item['data']['code'] == 'F401'
+
+    # --- 11. Navigate Up to Category from Rule ---
     app.navigate_items(up_event)
     app.update_idletasks()
     assert app.selected_item['type'] == 'category'
-    assert app.selected_item['name'] == 'pycodestyle'
+    assert app.selected_item['name'] == 'Pyflakes'

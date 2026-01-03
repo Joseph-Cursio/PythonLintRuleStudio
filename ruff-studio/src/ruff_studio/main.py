@@ -333,11 +333,12 @@ class App(ctk.CTk):
                 ).pack(pady=2, anchor="w")
 
     def populate_rules_initial(self):
-        sorted_categories = sorted(self.all_rules.items())
+        # Use the natural insertion order of categories from the dictionary
+        categories = self.all_rules.items()
 
         # Create a list of navigable items (categories and rules) in display order
         self.navigable_items = []
-        for category_name, category_data in sorted_categories:
+        for category_name, category_data in categories:
             category_item = {'type': 'category', 'name': category_name, 'data': category_data}
             self.navigable_items.append(category_item)
             sorted_rules = sorted(category_data['rules'], key=lambda r: r['code'])
@@ -346,7 +347,7 @@ class App(ctk.CTk):
                 self.navigable_items.append(rule_item)
 
 
-        for category_name, category_data in sorted_categories:
+        for category_name, category_data in categories:
             # --- Category Header ---
             category_frame = ctk.CTkFrame(self.rules_frame)
             category_frame.pack(fill="x", pady=(5, 1), padx=5)
