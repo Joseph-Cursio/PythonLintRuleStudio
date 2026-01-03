@@ -361,20 +361,20 @@ class App(ctk.CTk):
             ignore_rb.pack(side="left", padx=5)
             default_rb.pack(side="left", padx=5)
 
-            self.rule_widgets[category_name] = {
-                'effective_state_indicator': effective_state_indicator,
-                'effective_state_variable': effective_state_var,
-                'radio_variable': radio_var,
-                'prefix': category_data['prefix'],
-                'rules': {}
-            }
-
             # --- Rules Container ---
             rules_container = ctk.CTkFrame(self.rules_frame, fg_color="transparent")
             rules_container.pack(fill="x", padx=(25, 5))
 
-            self.rule_widgets[category_name]['rules_container'] = rules_container
-            self.rule_widgets[category_name]['toggle_button'] = toggle_button
+            self.rule_widgets[category_name] = {
+                'category_frame': category_frame,
+                'effective_state_indicator': effective_state_indicator,
+                'effective_state_variable': effective_state_var,
+                'radio_variable': radio_var,
+                'prefix': category_data['prefix'],
+                'rules_container': rules_container,
+                'toggle_button': toggle_button,
+                'rules': {}
+            }
 
             for rule in sorted(category_data['rules'], key=lambda r: r['code']):
                 frame = ctk.CTkFrame(rules_container)
@@ -551,11 +551,12 @@ class App(ctk.CTk):
     def toggle_category_rules(self, category_name):
         container = self.rule_widgets[category_name]['rules_container']
         toggle_button = self.rule_widgets[category_name]['toggle_button']
+        category_frame = self.rule_widgets[category_name]['category_frame']
         if container.winfo_viewable():
             container.pack_forget()
             toggle_button.configure(text="►")
         else:
-            container.pack(fill="x", padx=(25, 5))
+            container.pack(fill="x", padx=(25, 5), after=category_frame)
             toggle_button.configure(text="▼")
 
 
