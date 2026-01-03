@@ -335,6 +335,12 @@ class App(ctk.CTk):
             category_frame.pack(fill="x", pady=(5, 1), padx=5)
 
             effective_state_var = ctk.StringVar()
+            toggle_button = ctk.CTkButton(
+                category_frame, text="▼", width=20,
+                command=lambda cn=category_name: self.toggle_category_rules(cn)
+            )
+            toggle_button.pack(side="left", padx=5)
+
             effective_state_indicator = ctk.CTkCheckBox(category_frame, text="", variable=effective_state_var, onvalue="on", offvalue="off", state="disabled")
             effective_state_indicator.pack(side="left", padx=(0, 5))
 
@@ -342,15 +348,9 @@ class App(ctk.CTk):
             category_label = ctk.CTkLabel(category_frame, text=f"{category_name} ({category_data['prefix']})", anchor="w")
             category_label.pack(side="left", fill="x", expand=True)
 
-            toggle_button = ctk.CTkButton(
-                category_frame, text="▼", width=20,
-                command=lambda cn=category_name: self.toggle_category_rules(cn)
-            )
-            toggle_button.pack(side="right", padx=5)
-
             # Radio buttons for category
             radio_frame = ctk.CTkFrame(category_frame, fg_color="transparent")
-            radio_frame.pack(side="left", padx=10)
+            radio_frame.pack(side="right", padx=10)
             radio_var = ctk.StringVar(value="default")
 
             select_rb = ctk.CTkRadioButton(radio_frame, text="Select", variable=radio_var, value="select", command=lambda p=category_data['prefix']: self.stage_category_change(p, "select"))
