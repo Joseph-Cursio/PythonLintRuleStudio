@@ -53,6 +53,9 @@ class App(ctk.CTk):
         self.staged_changes = {}
         self.base_scan_results = []
         self.selected_rule_frame = None
+        self.selected_category_frame = None
+        self.selected_item = None
+        self.navigable_items = []
 
         self.analyzer = workspace_analyzer.WorkspaceAnalyzer("ruff_studio.db")
         self.queue = queue.Queue()
@@ -65,13 +68,15 @@ class App(ctk.CTk):
         # Create main layout
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=2)
-        self.grid_columnconfigure(1, weight=2)
-        self.grid_columnconfigure(2, weight=3)
+        self.grid_columnconfigure(1, weight=0) # Sash
+        self.grid_columnconfigure(2, weight=2)
+        self.grid_columnconfigure(3, weight=0) # Sash
+        self.grid_columnconfigure(4, weight=3)
 
         # --- Top Bar ---
         self.top_frame = ctk.CTkFrame(self, height=50)
         self.top_frame.grid(
-            row=0, column=0, columnspan=3, sticky="ew", padx=10, pady=10
+            row=0, column=0, columnspan=5, sticky="ew", padx=10, pady=10
         )
 
         self.select_button = ctk.CTkButton(
@@ -106,14 +111,58 @@ class App(ctk.CTk):
         self.rules_label.pack(pady=10)
 
         self.info_frame = ctk.CTkScrollableFrame(self)
-        self.info_frame.grid(row=1, column=1, sticky="nsew", padx=10, pady=0)
+        self.info_frame.grid(row=1, column=2, sticky="nsew", padx=10, pady=0)
         self.info_label = ctk.CTkLabel(self.info_frame, text="Rule Info")
         self.info_label.pack(pady=10)
 
         self.results_frame = ctk.CTkScrollableFrame(self)
-        self.results_frame.grid(row=1, column=2, sticky="nsew", padx=0, pady=0)
+        self.results_frame.grid(row=1, column=4, sticky="nsew", padx=0, pady=0)
         self.results_label = ctk.CTkLabel(self.results_frame, text="Scan Results")
         self.results_label.pack(pady=10)
+
+        # --- Sashes for resizing ---
+        self.sash1 = ctk.CTkFrame(self, width=4, cursor="sb_h_double_arrow")
+        self.sash1.grid(row=1, column=1, sticky="ns")
+        self.sash1.bind("<Button-1>", lambda e: self.start_resize(e, 0))
+        self.sash1.bind("<B1-Motion>", self.do_resize)
+
+        self.sash2 = ctk.CTkFrame(self, width=4, cursor="sb_h_double_arrow")
+        self.sash2.grid(row=1, column=3, sticky="ns")
+        self.sash2.bind("<Button-1>", lambda e: self.start_resize(e, 2))
+        self.sash2.bind("<B1-Motion>", self.do_resize)
+
+        self.resize_start_x = 0
+        self.resize_start_col = 0
+
+        self.bind("<Up>", self.navigate_items)
+        self.bind("<Down>", self.navigate_items)
+
+    def start_resize(self, event, col):
+        self.resize_start_x = event.x_root
+        self.resize_start_col = col
+
+    def do_resize(self, event):
+        delta = event.x_root - self.resize_start_x
+
+        # Adjust column weights
+        weight0 = self.grid_columnconfigure(0)['weight']
+        weight2 = self.grid_columnconfigure(2)['weight']
+        weight4 = self.grid_columnconfigure(4)['weight']
+
+        total_weight = weight0 + weight2 + weight4
+
+        if self.resize_start_col == 0:
+            new_weight0 = max(1, weight0 + delta)
+            new_weight2 = max(1, weight2 - delta)
+            self.grid_columnconfigure(0, weight=new_weight0)
+            self.grid_columnconfigure(2, weight=new_weight2)
+        else: # col == 2
+            new_weight2 = max(1, weight2 + delta)
+            new_weight4 = max(1, weight4 - delta)
+            self.grid_columnconfigure(2, weight=new_weight2)
+            self.grid_columnconfigure(4, weight=new_weight4)
+
+        self.resize_start_x = event.x_root
 
 
     def run_in_thread(self, worker, command_name, *args):
@@ -152,6 +201,8 @@ class App(ctk.CTk):
                 self.all_rules = data
                 self.rules_label.configure(text="Rules")
                 self.populate_rules_initial()
+                if not isinstance(self.all_rules, dict):
+                    return
                 self.managed_prefixes = {
                     cat['prefix'] for cat in self.all_rules.values()
                 }
@@ -282,29 +333,46 @@ class App(ctk.CTk):
                 ).pack(pady=2, anchor="w")
 
     def populate_rules_initial(self):
-        sorted_categories = sorted(self.all_rules.items())
+        # Use the natural insertion order of categories from the dictionary
+        categories = self.all_rules.items()
 
-        for category_name, category_data in sorted_categories:
+        # Create a list of navigable items (categories and rules) in display order
+        self.navigable_items = []
+        for category_name, category_data in categories:
+            category_item = {'type': 'category', 'name': category_name, 'data': category_data}
+            self.navigable_items.append(category_item)
+            sorted_rules = sorted(category_data['rules'], key=lambda r: r['code'])
+            for rule in sorted_rules:
+                rule_item = {'type': 'rule', 'data': rule, 'category_name': category_name}
+                self.navigable_items.append(rule_item)
+
+
+        for category_name, category_data in categories:
             # --- Category Header ---
             category_frame = ctk.CTkFrame(self.rules_frame)
             category_frame.pack(fill="x", pady=(5, 1), padx=5)
 
+            # Allow the category header itself to be selected
+            category_frame.bind("<Button-1>", lambda event, cn=category_name: self.select_category(cn))
+
+
             effective_state_var = ctk.StringVar()
-            effective_state_indicator = ctk.CTkCheckBox(category_frame, text="", variable=effective_state_var, onvalue="on", offvalue="off", state="disabled")
-            effective_state_indicator.pack(side="left", padx=(0, 5))
-
-            category_label = ctk.CTkLabel(category_frame, text=f"{category_name} ({category_data['prefix']})", anchor="w")
-            category_label.pack(side="left", fill="x", expand=True)
-
             toggle_button = ctk.CTkButton(
                 category_frame, text="▼", width=20,
                 command=lambda cn=category_name: self.toggle_category_rules(cn)
             )
-            toggle_button.pack(side="right", padx=5)
+            toggle_button.pack(side="left", padx=5)
+
+            effective_state_indicator = ctk.CTkCheckBox(category_frame, text="", variable=effective_state_var, onvalue="on", offvalue="off", state="disabled")
+            effective_state_indicator.pack(side="left", padx=(0, 5))
+
 
             # Radio buttons for category
             radio_frame = ctk.CTkFrame(category_frame, fg_color="transparent")
-            radio_frame.pack(side="right", padx=10)
+            radio_frame.pack(side="left", padx=10)
+
+            category_label = ctk.CTkLabel(category_frame, text=f"{category_name} ({category_data['prefix']})", anchor="w")
+            category_label.pack(side="left", fill="x", expand=True)
             radio_var = ctk.StringVar(value="default")
 
             select_rb = ctk.CTkRadioButton(radio_frame, text="Select", variable=radio_var, value="select", command=lambda p=category_data['prefix']: self.stage_category_change(p, "select"))
@@ -315,20 +383,20 @@ class App(ctk.CTk):
             ignore_rb.pack(side="left", padx=5)
             default_rb.pack(side="left", padx=5)
 
-            self.rule_widgets[category_name] = {
-                'effective_state_indicator': effective_state_indicator,
-                'effective_state_variable': effective_state_var,
-                'radio_variable': radio_var,
-                'prefix': category_data['prefix'],
-                'rules': {}
-            }
-
             # --- Rules Container ---
             rules_container = ctk.CTkFrame(self.rules_frame, fg_color="transparent")
             rules_container.pack(fill="x", padx=(25, 5))
 
-            self.rule_widgets[category_name]['rules_container'] = rules_container
-            self.rule_widgets[category_name]['toggle_button'] = toggle_button
+            self.rule_widgets[category_name] = {
+                'category_frame': category_frame,
+                'effective_state_indicator': effective_state_indicator,
+                'effective_state_variable': effective_state_var,
+                'radio_variable': radio_var,
+                'prefix': category_data['prefix'],
+                'rules_container': rules_container,
+                'toggle_button': toggle_button,
+                'rules': {}
+            }
 
             for rule in sorted(category_data['rules'], key=lambda r: r['code']):
                 frame = ctk.CTkFrame(rules_container)
@@ -343,12 +411,13 @@ class App(ctk.CTk):
                 if rule['status'] != 'stable':
                     rule_text += f" (⚠️ {rule['status']})"
 
-                label = ctk.CTkLabel(frame, text=f"{rule_text}: {rule['name']}", anchor="w")
-                label.pack(side="left", fill="x", expand=True, padx=5)
 
                 # Radio buttons for the rule
                 rule_radio_frame = ctk.CTkFrame(frame, fg_color="transparent")
-                rule_radio_frame.pack(side="right", padx=10)
+                rule_radio_frame.pack(side="left", padx=10)
+
+                label = ctk.CTkLabel(frame, text=f"{rule_text}: {rule['name']}", anchor="w")
+                label.pack(side="left", fill="x", expand=True, padx=5)
                 rule_radio_var = ctk.StringVar(value="default")
 
                 rule_select_rb = ctk.CTkRadioButton(rule_radio_frame, text="Select", variable=rule_radio_var, value="select", command=lambda rc=rule['code']: self.stage_rule_change(rc, "select"))
@@ -362,7 +431,7 @@ class App(ctk.CTk):
                 if rule['status'] != 'stable':
                     Tooltip(label, f"This rule is {rule['status']}.")
 
-                label.bind("<Button-1>", lambda event, r=rule: self.show_rule_info(r))
+                label.bind("<Button-1>", lambda event, r=rule, cn=category_name: self.show_rule_info(r, cn))
 
                 rule_widget_data = {
                     'effective_state_indicator': rule_effective_indicator,
@@ -384,8 +453,11 @@ class App(ctk.CTk):
         # need to handle prefix expansion. For now, we assume codes are explicit.
 
         enabled = set()
+        if not isinstance(self.all_rules, dict):
+            return enabled
+
         all_managed_codes = {
-            rule["code"] for cat in self.all_rules for rule in cat["rules"]
+            rule["code"] for cat in self.all_rules.values() for rule in cat["rules"]
         }
 
         for code in all_managed_codes:
@@ -501,11 +573,12 @@ class App(ctk.CTk):
     def toggle_category_rules(self, category_name):
         container = self.rule_widgets[category_name]['rules_container']
         toggle_button = self.rule_widgets[category_name]['toggle_button']
+        category_frame = self.rule_widgets[category_name]['category_frame']
         if container.winfo_viewable():
             container.pack_forget()
             toggle_button.configure(text="►")
         else:
-            container.pack(fill="x", padx=(25, 5))
+            container.pack(fill="x", padx=(25, 5), after=category_frame)
             toggle_button.configure(text="▼")
 
 
@@ -567,19 +640,80 @@ class App(ctk.CTk):
         ruff_config["ignore"] = sorted(list(final_ignore))
         return ruff_config
 
-    def show_rule_info(self, rule):
-        # Reset the previously selected rule's background color
+    def navigate_items(self, event):
+        if not self.selected_item or not self.navigable_items:
+            return
+
+        try:
+            current_index = self.navigable_items.index(self.selected_item)
+        except ValueError:
+            return # Should not happen if selection is managed properly
+
+        if event.keysym == "Up":
+            next_index = max(0, current_index - 1)
+        elif event.keysym == "Down":
+            next_index = min(len(self.navigable_items) - 1, current_index + 1)
+        else:
+            return
+
+        if next_index != current_index:
+            next_item = self.navigable_items[next_index]
+            if next_item['type'] == 'rule':
+                self.show_rule_info(next_item['data'], next_item['category_name'])
+            elif next_item['type'] == 'category':
+                self.select_category(next_item['name'])
+
+    def select_category(self, category_name):
+        # Find the full item from the navigable list
+        selected_nav_item = None
+        for item in self.navigable_items:
+            if item['type'] == 'category' and item['name'] == category_name:
+                selected_nav_item = item
+                break
+        self.selected_item = selected_nav_item
+
+        # Reset any previously selected frames
         if self.selected_rule_frame:
             self.selected_rule_frame.configure(fg_color="transparent")
+        if self.selected_category_frame:
+            self.selected_category_frame.configure(fg_color="transparent")
+
+        # Highlight the new selected category
+        if category_name in self.rule_widgets:
+            self.selected_category_frame = self.rule_widgets[category_name]['category_frame']
+            self.selected_category_frame.configure(fg_color="lightblue")
+
+        # Clear the info panel
+        for widget in self.info_frame.winfo_children():
+            if widget != self.info_label:
+                widget.destroy()
+        self.info_label.configure(text="Rule Info")
+
+
+    def show_rule_info(self, rule, category_name=None):
+        # Find the full item from the navigable list
+        selected_nav_item = None
+        for item in self.navigable_items:
+            if item['type'] == 'rule' and item['data'] == rule:
+                selected_nav_item = item
+                break
+        self.selected_item = selected_nav_item
+
+        # Reset any previously selected frames
+        if self.selected_rule_frame:
+            self.selected_rule_frame.configure(fg_color="transparent")
+        if self.selected_category_frame:
+            self.selected_category_frame.configure(fg_color="transparent")
 
         # Highlight the new selected rule
         rule_code = rule['code']
-        category_name = rule.get("linter", "Unknown")
+        category_name_for_widget = category_name or selected_nav_item.get('category_name')
 
-        if (category_name in self.rule_widgets and
-                rule_code in self.rule_widgets[category_name]['rules']):
+
+        if (category_name_for_widget in self.rule_widgets and
+                rule_code in self.rule_widgets[category_name_for_widget]['rules']):
             self.selected_rule_frame = (
-                self.rule_widgets[category_name]['rules'][rule_code]['frame']
+                self.rule_widgets[category_name_for_widget]['rules'][rule_code]['frame']
             )
             self.selected_rule_frame.configure(fg_color="lightblue")
 
@@ -602,20 +736,6 @@ class App(ctk.CTk):
             wraplength=250, justify="left"
         ).pack(pady=5, anchor="w")
 
-        if rule.get('documentation'):
-            ctk.CTkLabel(self.info_frame, text="─" * 40).pack(pady=5)
-            ctk.CTkLabel(
-                self.info_frame, text="Documentation:", justify="left"
-            ).pack(pady=5, anchor="w")
-            ctk.CTkLabel(
-                self.info_frame, text=rule['documentation'],
-                wraplength=250, justify="left"
-            ).pack(pady=5, anchor="w")
-
-        if rule.get('documentation'):
-            ctk.CTkLabel(self.info_frame, text="─" * 40).pack(pady=5)
-            ctk.CTkLabel(self.info_frame, text=f"Documentation:", justify="left").pack(pady=5, anchor="w")
-            ctk.CTkLabel(self.info_frame, text=rule['documentation'], wraplength=250, justify="left").pack(pady=5, anchor="w")
 
 if __name__ == "__main__":
     import sys
