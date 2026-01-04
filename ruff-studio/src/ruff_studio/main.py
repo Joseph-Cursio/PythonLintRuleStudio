@@ -112,24 +112,25 @@ class App(ctk.CTk):
         self.rules_panel_container.grid_columnconfigure(0, weight=1)
 
         # --- Rules Panel Header ---
-        self.rules_header_frame = ctk.CTkFrame(self.rules_panel_container, height=30)
-        self.rules_header_frame.grid(row=0, column=0, sticky="ew")
-        self.rules_header_frame.grid_columnconfigure(1, weight=1)
+        self.rules_header_frame = ctk.CTkFrame(self.rules_panel_container, height=30, fg_color="transparent")
+        self.rules_header_frame.grid(row=0, column=0, sticky="ew", padx=5)
+        self.rules_header_frame.grid_columnconfigure(3, weight=1) # Make the label column expand
 
-        # Add spacer for alignment with rule checkboxes
-        ctk.CTkLabel(self.rules_header_frame, text="").pack(side="left", padx=22)
+        # Spacer for toggle button column
+        ctk.CTkLabel(self.rules_header_frame, text="", width=20).grid(row=0, column=0, padx=5)
+        # "Enabled" label for checkbox column
+        ctk.CTkLabel(self.rules_header_frame, text="Enabled", anchor="w").grid(row=0, column=1, padx=(0,5))
 
         # Configure grid for radio button labels
         radio_header_frame = ctk.CTkFrame(self.rules_header_frame, fg_color="transparent")
-        radio_header_frame.pack(side="left")
-        radio_header_frame.grid_columnconfigure(0, minsize=55)
-        radio_header_frame.grid_columnconfigure(1, minsize=55)
-        radio_header_frame.grid_columnconfigure(2, minsize=55)
+        radio_header_frame.grid(row=0, column=2)
+        radio_header_frame.grid_columnconfigure(0, minsize=45)
+        radio_header_frame.grid_columnconfigure(1, minsize=45)
+        radio_header_frame.grid_columnconfigure(2, minsize=45)
 
-
-        ctk.CTkLabel(radio_header_frame, text="Select", anchor="center").grid(row=0, column=0, padx=5)
-        ctk.CTkLabel(radio_header_frame, text="Ignore", anchor="center").grid(row=0, column=1, padx=5)
-        ctk.CTkLabel(radio_header_frame, text="Default", anchor="center").grid(row=0, column=2, padx=5)
+        ctk.CTkLabel(radio_header_frame, text="Select", anchor="center").grid(row=0, column=0)
+        ctk.CTkLabel(radio_header_frame, text="Ignore", anchor="center").grid(row=0, column=1)
+        ctk.CTkLabel(radio_header_frame, text="Default", anchor="center").grid(row=0, column=2)
 
 
         self.rules_frame = ctk.CTkScrollableFrame(self.rules_panel_container)
@@ -399,9 +400,9 @@ class App(ctk.CTk):
             # Radio buttons for category
             radio_frame = ctk.CTkFrame(category_frame, fg_color="transparent")
             radio_frame.grid(row=0, column=2)
-            radio_frame.grid_columnconfigure(0, minsize=55)
-            radio_frame.grid_columnconfigure(1, minsize=55)
-            radio_frame.grid_columnconfigure(2, minsize=55)
+            radio_frame.grid_columnconfigure(0, minsize=45)
+            radio_frame.grid_columnconfigure(1, minsize=45)
+            radio_frame.grid_columnconfigure(2, minsize=45)
 
             radio_var = ctk.StringVar(value="default")
             select_rb = ctk.CTkRadioButton(radio_frame, text="", variable=radio_var, value="select", command=lambda p=category_data['prefix']: self.stage_category_change(p, "select"))
@@ -453,9 +454,9 @@ class App(ctk.CTk):
                 # Radio buttons for the rule
                 rule_radio_frame = ctk.CTkFrame(frame, fg_color="transparent")
                 rule_radio_frame.grid(row=0, column=2)
-                rule_radio_frame.grid_columnconfigure(0, minsize=55)
-                rule_radio_frame.grid_columnconfigure(1, minsize=55)
-                rule_radio_frame.grid_columnconfigure(2, minsize=55)
+                rule_radio_frame.grid_columnconfigure(0, minsize=45)
+                rule_radio_frame.grid_columnconfigure(1, minsize=45)
+                rule_radio_frame.grid_columnconfigure(2, minsize=45)
 
                 rule_radio_var = ctk.StringVar(value="default")
                 rule_select_rb = ctk.CTkRadioButton(rule_radio_frame, text="", variable=rule_radio_var, value="select", command=lambda rc=rule['code']: self.stage_rule_change(rc, "select"))
