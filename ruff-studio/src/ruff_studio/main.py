@@ -124,9 +124,9 @@ class App(ctk.CTk):
         # Configure grid for radio button labels
         radio_header_frame = ctk.CTkFrame(self.rules_header_frame, fg_color="transparent")
         radio_header_frame.grid(row=0, column=2)
-        radio_header_frame.grid_columnconfigure(0, minsize=25)
-        radio_header_frame.grid_columnconfigure(1, minsize=25)
-        radio_header_frame.grid_columnconfigure(2, minsize=25)
+        radio_header_frame.grid_columnconfigure(0, minsize=20)
+        radio_header_frame.grid_columnconfigure(1, minsize=20)
+        radio_header_frame.grid_columnconfigure(2, minsize=20)
 
         ctk.CTkLabel(radio_header_frame, text="Select", anchor="center").grid(row=0, column=0)
         ctk.CTkLabel(radio_header_frame, text="Ignore", anchor="center").grid(row=0, column=1)
@@ -400,9 +400,9 @@ class App(ctk.CTk):
             # Radio buttons for category
             radio_frame = ctk.CTkFrame(category_frame, fg_color="transparent")
             radio_frame.grid(row=0, column=2)
-            radio_frame.grid_columnconfigure(0, minsize=25)
-            radio_frame.grid_columnconfigure(1, minsize=25)
-            radio_frame.grid_columnconfigure(2, minsize=25)
+            radio_frame.grid_columnconfigure(0, minsize=20)
+            radio_frame.grid_columnconfigure(1, minsize=20)
+            radio_frame.grid_columnconfigure(2, minsize=20)
 
             radio_var = ctk.StringVar(value="default")
             select_rb = ctk.CTkRadioButton(radio_frame, text="", variable=radio_var, value="select", command=lambda p=category_data['prefix']: self.stage_category_change(p, "select"))
@@ -454,9 +454,9 @@ class App(ctk.CTk):
                 # Radio buttons for the rule
                 rule_radio_frame = ctk.CTkFrame(frame, fg_color="transparent")
                 rule_radio_frame.grid(row=0, column=2)
-                rule_radio_frame.grid_columnconfigure(0, minsize=25)
-                rule_radio_frame.grid_columnconfigure(1, minsize=25)
-                rule_radio_frame.grid_columnconfigure(2, minsize=25)
+                rule_radio_frame.grid_columnconfigure(0, minsize=20)
+                rule_radio_frame.grid_columnconfigure(1, minsize=20)
+                rule_radio_frame.grid_columnconfigure(2, minsize=20)
 
                 rule_radio_var = ctk.StringVar(value="default")
                 rule_select_rb = ctk.CTkRadioButton(rule_radio_frame, text="", variable=rule_radio_var, value="select", command=lambda rc=rule['code']: self.stage_rule_change(rc, "select"))
