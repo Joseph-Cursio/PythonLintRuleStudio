@@ -736,6 +736,13 @@ class App(ctk.CTk):
             wraplength=250, justify="left"
         ).pack(pady=5, anchor="w")
 
+        if rule.get("documentation"):
+            # Use a Textbox for better scrolling and text selection
+            doc_textbox = ctk.CTkTextbox(self.info_frame, wrap="word", height=400)
+            doc_textbox.pack(pady=(10, 5), fill="both", expand=True)
+            doc_textbox.insert("1.0", rule["documentation"])
+            doc_textbox.configure(state="disabled")
+
 
 if __name__ == "__main__":
     import sys
