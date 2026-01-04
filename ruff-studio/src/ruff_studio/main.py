@@ -333,11 +333,12 @@ class App(ctk.CTk):
                 ).pack(pady=2, anchor="w")
 
     def populate_rules_initial(self):
-        sorted_categories = sorted(self.all_rules.items())
+        # Use the natural insertion order of categories from the dictionary
+        categories = self.all_rules.items()
 
         # Create a list of navigable items (categories and rules) in display order
         self.navigable_items = []
-        for category_name, category_data in sorted_categories:
+        for category_name, category_data in categories:
             category_item = {'type': 'category', 'name': category_name, 'data': category_data}
             self.navigable_items.append(category_item)
             sorted_rules = sorted(category_data['rules'], key=lambda r: r['code'])
@@ -346,7 +347,7 @@ class App(ctk.CTk):
                 self.navigable_items.append(rule_item)
 
 
-        for category_name, category_data in sorted_categories:
+        for category_name, category_data in categories:
             # --- Category Header ---
             category_frame = ctk.CTkFrame(self.rules_frame)
             category_frame.pack(fill="x", pady=(5, 1), padx=5)
@@ -366,12 +367,12 @@ class App(ctk.CTk):
             effective_state_indicator.pack(side="left", padx=(0, 5))
 
 
-            category_label = ctk.CTkLabel(category_frame, text=f"{category_name} ({category_data['prefix']})", anchor="w")
-            category_label.pack(side="left", fill="x", expand=True)
-
             # Radio buttons for category
             radio_frame = ctk.CTkFrame(category_frame, fg_color="transparent")
-            radio_frame.pack(side="right", padx=10)
+            radio_frame.pack(side="left", padx=10)
+
+            category_label = ctk.CTkLabel(category_frame, text=f"{category_name} ({category_data['prefix']})", anchor="w")
+            category_label.pack(side="left", fill="x", expand=True)
             radio_var = ctk.StringVar(value="default")
 
             select_rb = ctk.CTkRadioButton(radio_frame, text="Select", variable=radio_var, value="select", command=lambda p=category_data['prefix']: self.stage_category_change(p, "select"))
@@ -411,12 +412,12 @@ class App(ctk.CTk):
                     rule_text += f" (⚠️ {rule['status']})"
 
 
-                label = ctk.CTkLabel(frame, text=f"{rule_text}: {rule['name']}", anchor="w")
-                label.pack(side="left", fill="x", expand=True, padx=5)
-
                 # Radio buttons for the rule
                 rule_radio_frame = ctk.CTkFrame(frame, fg_color="transparent")
                 rule_radio_frame.pack(side="left", padx=10)
+
+                label = ctk.CTkLabel(frame, text=f"{rule_text}: {rule['name']}", anchor="w")
+                label.pack(side="left", fill="x", expand=True, padx=5)
                 rule_radio_var = ctk.StringVar(value="default")
 
                 rule_select_rb = ctk.CTkRadioButton(rule_radio_frame, text="Select", variable=rule_radio_var, value="select", command=lambda rc=rule['code']: self.stage_rule_change(rc, "select"))
