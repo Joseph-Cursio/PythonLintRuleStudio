@@ -6,7 +6,7 @@ import threading
 import queue
 import copy
 from unittest.mock import MagicMock
-from . import ruff_adapter, config_manager, workspace_analyzer
+from . import ruff_adapter, config_manager, workspace_analyzer, profile_manager
 
 class Tooltip:
     def __init__(self, widget, text):
@@ -100,6 +100,15 @@ class App(ctk.CTk):
             command=self.apply_changes
         )
         self.apply_button.pack(side="left", padx=5)
+
+        self.profile_menu = ctk.CTkOptionMenu(
+            self.action_frame,
+            values=["Apply a Profile..."] + profile_manager.get_built_in_profiles(),
+            command=self.apply_profile
+        )
+        self.profile_menu.pack(side="left", padx=5)
+        self.profile_menu.set("Apply a Profile...")
+        self.profile_menu.configure(state="disabled")
 
         self.status_label = ctk.CTkLabel(self.top_frame, text="")
         self.status_label.pack(side="right", padx=10)
@@ -280,6 +289,7 @@ class App(ctk.CTk):
 
             self.run_in_thread(self._run_full_scan_worker, "run_full_scan", directory)
             self.update_rules_panel()
+            self.profile_menu.configure(state="normal")
 
     def update_results_panel(self, results):
         self.results_label.configure(text=f"Scan Results ({len(results)} violations)")
@@ -633,6 +643,49 @@ class App(ctk.CTk):
             ruff_adapter.run_scan_with_config, "run_simulation",
             self.current_directory, sim_config_data
         )
+
+    def apply_profile(self, profile_name):
+        if profile_name == "Apply a Profile...":
+            return
+
+        try:
+            profile_data = profile_manager.load_profile(profile_name)
+
+            # We don't need to apply to a config copy, as we'll just read the rules
+            # and then stage changes through the existing UI logic.
+            profile_ruff_config = profile_data.get("profile", {}).get("rules", {}).get("ruff", {})
+
+            # Create a dummy config to resolve the profile's effective rules
+            dummy_config = {"select": profile_ruff_config.get("select", []), "ignore": profile_ruff_config.get("ignore", [])}
+            profile_rules = self._get_rules_from_config(dummy_config)
+
+            # Reset staged changes
+            self.staged_changes = {}
+
+            # Stage changes for every managed rule based on the profile
+            for category_widgets in self.rule_widgets.values():
+                for rule_code in category_widgets['rules'].keys():
+                    if rule_code in profile_rules:
+                        self.staged_changes[rule_code] = "select"
+                    else:
+                        # We explicitly ignore rules not in the profile's select list
+                        self.staged_changes[rule_code] = "ignore"
+
+            # Ensure the UI reflects the newly staged changes
+            self.update_rules_panel()
+            self.simulate_button.configure(state="normal")
+            self.apply_button.configure(state="normal")
+
+            messagebox.showinfo(
+                "Profile Applied",
+                f"The '{profile_name}' profile has been staged. "
+                "Review the changes and click 'Simulate' or 'Apply'."
+            )
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to apply profile: {e}")
+        finally:
+            self.profile_menu.set("Apply a Profile...")
+
 
     def apply_changes(self):
         if not self.pyproject_data or not self.pyproject_path:
