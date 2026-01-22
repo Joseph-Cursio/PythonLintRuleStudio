@@ -34,6 +34,79 @@ class Tooltip:
             self.tooltip_window.destroy()
         self.tooltip_window = None
 
+class ProfileComparisonWindow(ctk.CTkToplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.title("Compare Profiles")
+        self.geometry("600x400")
+
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        # --- Top Frame for selections ---
+        top_frame = ck.CTkFrame(self)
+        top_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
+
+        self.profiles = profile_manager.get_built_in_profiles()
+
+        self.profile1_var = ctk.StringVar(value=self.profiles[0] if self.profiles else "")
+        self.profile2_var = ctk.StringVar(value=self.profiles[1] if len(self.profiles) > 1 else "")
+
+        self.profile1_menu = ctk.CTkOptionMenu(top_frame, variable=self.profile1_var, values=self.profiles)
+        self.profile1_menu.pack(side="left", padx=5)
+
+        ctk.CTkLabel(top_frame, text="vs.").pack(side="left", padx=5)
+
+        self.profile2_menu = ctk.CTkOptionMenu(top_frame, variable=self.profile2_var, values=self.profiles)
+        self.profile2_menu.pack(side="left", padx=5)
+
+        self.compare_button = ctk.CTkButton(top_frame, text="Compare", command=self.do_comparison)
+        self.compare_button.pack(side="left", padx=10)
+
+        # --- Results Textbox ---
+        self.results_textbox = ctk.CTkTextbox(self, wrap="word")
+        self.results_textbox.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        self.results_textbox.insert("1.0", "Select two profiles and click 'Compare' to see the differences.")
+        self.results_textbox.configure(state="disabled")
+
+    def do_comparison(self):
+        p1 = self.profile1_var.get()
+        p2 = self.profile2_var.get()
+
+        if not p1 or not p2 or p1 == p2:
+            self.results_textbox.configure(state="normal")
+            self.results_textbox.delete("1.0", "end")
+            self.results_textbox.insert("1.0", "Please select two different profiles to compare.")
+            self.results_textbox.configure(state="disabled")
+            return
+
+        diff = profile_manager.compare_profiles(p1, p2)
+
+        report = f"Comparing '{p1}' vs '{p2}':\n\n"
+        report += "--- RULES SELECTED --- \n"
+        if diff["select_only_in_1"]:
+            report += f"\nOnly in '{p1}':\n" + "\n".join(f"  - {r}" for r in diff["select_only_in_1"]) + "\n"
+        if diff["select_only_in_2"]:
+            report += f"\nOnly in '{p2}':\n" + "\n".join(f"  - {r}" for r in diff["select_only_in_2"]) + "\n"
+
+        report += "\n--- RULES IGNORED ---\n"
+        if diff["ignore_only_in_1"]:
+            report += f"\nOnly in '{p1}':\n" + "\n".join(f"  - {r}" for r in diff["ignore_only_in_1"]) + "\n"
+        if diff["ignore_only_in_2"]:
+            report += f"\nOnly in '{p2}':\n" + "\n".join(f"  - {r}" for r in diff["ignore_only_in_2"]) + "\n"
+
+        report += f"\n--- COMMON RULES ---\n"
+        if diff["common_select"]:
+            report += "\nCommonly Selected:\n" + "\n".join(f"  - {r}" for r in diff["common_select"]) + "\n"
+        if diff["common_ignore"]:
+            report += "\nCommonly Ignored:\n" + "\n".join(f"  - {r}" for r in diff["common_ignore"]) + "\n"
+
+        self.results_textbox.configure(state="normal")
+        self.results_textbox.delete("1.0", "end")
+        self.results_textbox.insert("1.0", report)
+        self.results_textbox.configure(state="disabled")
+
+
 class App(ctk.CTk):
     def __init__(self, headless=False):
         if not headless:
@@ -109,6 +182,11 @@ class App(ctk.CTk):
         self.profile_menu.pack(side="left", padx=5)
         self.profile_menu.set("Apply a Profile...")
         self.profile_menu.configure(state="disabled")
+
+        self.compare_profiles_button = ctk.CTkButton(
+            self.action_frame, text="Compare Profiles", command=self.open_comparison_window
+        )
+        self.compare_profiles_button.pack(side="left", padx=5)
 
         self.status_label = ctk.CTkLabel(self.top_frame, text="")
         self.status_label.pack(side="right", padx=10)
@@ -705,6 +783,9 @@ class App(ctk.CTk):
 
         self.update_rules_panel()
         self.run_in_thread(self._run_full_scan_worker, "run_full_scan", self.current_directory)
+
+    def open_comparison_window(self):
+        ProfileComparisonWindow(self)
 
     def get_effective_config(self):
         effective_data = copy.deepcopy(self.pyproject_data)
