@@ -1,0 +1,26 @@
+# ruff-studio/src/ruff_studio/profiles/strict.yaml
+profile:
+  name: "Strict"
+  description: "Aggressive quality enforcement"
+  author: "Ruff Studio"
+  version: "1.0.0"
+  tags: ["strict", "production"]
+
+  rules:
+    ruff:
+      select:
+        - "E"   # pycodestyle errors
+        - "W"   # pycodestyle warnings
+        - "F"   # pyflakes
+        - "C90" # mccabe complexity
+        - "I"   # isort
+        - "N"   # pep8-naming
+        - "D"   # pydocstyle
+        - "S"   # bandit (security)
+        - "B"   # flake8-bugbear
+        - "A"   # flake8-builtins
+        - "T20" # flake8-print
+      ignore:
+        - "D100" # Missing docstring in public module
+        - "D104" # Missing docstring in public package
+        - "D107" # Missing docstring in __init__
