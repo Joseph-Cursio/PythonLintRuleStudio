@@ -1,0 +1,15 @@
+# ruff-studio/src/ruff_studio/profiles/standard.yaml
+profile:
+  name: "Standard"
+  description: "Balanced defaults for most projects"
+  author: "Ruff Studio"
+  version: "1.0.0"
+  tags: ["standard", "balanced"]
+
+  rules:
+    ruff:
+      select:
+        - "E" # pycodestyle errors
+        - "F" # pyflakes
+      ignore:
+        - "E501" # line-length handled by formatter

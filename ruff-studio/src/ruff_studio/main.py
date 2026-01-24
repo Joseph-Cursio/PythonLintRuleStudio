@@ -6,7 +6,7 @@ import threading
 import queue
 import copy
 from unittest.mock import MagicMock
-from . import ruff_adapter, config_manager, workspace_analyzer
+from . import ruff_adapter, config_manager, workspace_analyzer, profile_manager, ci_integration
 
 class Tooltip:
     def __init__(self, widget, text):
@@ -33,6 +33,79 @@ class Tooltip:
         if self.tooltip_window:
             self.tooltip_window.destroy()
         self.tooltip_window = None
+
+class ProfileComparisonWindow(ctk.CTkToplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.title("Compare Profiles")
+        self.geometry("600x400")
+
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        # --- Top Frame for selections ---
+        top_frame = ck.CTkFrame(self)
+        top_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
+
+        self.profiles = profile_manager.get_built_in_profiles()
+
+        self.profile1_var = ctk.StringVar(value=self.profiles[0] if self.profiles else "")
+        self.profile2_var = ctk.StringVar(value=self.profiles[1] if len(self.profiles) > 1 else "")
+
+        self.profile1_menu = ctk.CTkOptionMenu(top_frame, variable=self.profile1_var, values=self.profiles)
+        self.profile1_menu.pack(side="left", padx=5)
+
+        ctk.CTkLabel(top_frame, text="vs.").pack(side="left", padx=5)
+
+        self.profile2_menu = ctk.CTkOptionMenu(top_frame, variable=self.profile2_var, values=self.profiles)
+        self.profile2_menu.pack(side="left", padx=5)
+
+        self.compare_button = ctk.CTkButton(top_frame, text="Compare", command=self.do_comparison)
+        self.compare_button.pack(side="left", padx=10)
+
+        # --- Results Textbox ---
+        self.results_textbox = ctk.CTkTextbox(self, wrap="word")
+        self.results_textbox.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        self.results_textbox.insert("1.0", "Select two profiles and click 'Compare' to see the differences.")
+        self.results_textbox.configure(state="disabled")
+
+    def do_comparison(self):
+        p1 = self.profile1_var.get()
+        p2 = self.profile2_var.get()
+
+        if not p1 or not p2 or p1 == p2:
+            self.results_textbox.configure(state="normal")
+            self.results_textbox.delete("1.0", "end")
+            self.results_textbox.insert("1.0", "Please select two different profiles to compare.")
+            self.results_textbox.configure(state="disabled")
+            return
+
+        diff = profile_manager.compare_profiles(p1, p2)
+
+        report = f"Comparing '{p1}' vs '{p2}':\n\n"
+        report += "--- RULES SELECTED --- \n"
+        if diff["select_only_in_1"]:
+            report += f"\nOnly in '{p1}':\n" + "\n".join(f"  - {r}" for r in diff["select_only_in_1"]) + "\n"
+        if diff["select_only_in_2"]:
+            report += f"\nOnly in '{p2}':\n" + "\n".join(f"  - {r}" for r in diff["select_only_in_2"]) + "\n"
+
+        report += "\n--- RULES IGNORED ---\n"
+        if diff["ignore_only_in_1"]:
+            report += f"\nOnly in '{p1}':\n" + "\n".join(f"  - {r}" for r in diff["ignore_only_in_1"]) + "\n"
+        if diff["ignore_only_in_2"]:
+            report += f"\nOnly in '{p2}':\n" + "\n".join(f"  - {r}" for r in diff["ignore_only_in_2"]) + "\n"
+
+        report += f"\n--- COMMON RULES ---\n"
+        if diff["common_select"]:
+            report += "\nCommonly Selected:\n" + "\n".join(f"  - {r}" for r in diff["common_select"]) + "\n"
+        if diff["common_ignore"]:
+            report += "\nCommonly Ignored:\n" + "\n".join(f"  - {r}" for r in diff["common_ignore"]) + "\n"
+
+        self.results_textbox.configure(state="normal")
+        self.results_textbox.delete("1.0", "end")
+        self.results_textbox.insert("1.0", report)
+        self.results_textbox.configure(state="disabled")
+
 
 class App(ctk.CTk):
     def __init__(self, headless=False):
@@ -100,6 +173,26 @@ class App(ctk.CTk):
             command=self.apply_changes
         )
         self.apply_button.pack(side="left", padx=5)
+
+        self.profile_menu = ctk.CTkOptionMenu(
+            self.action_frame,
+            values=["Apply a Profile..."] + profile_manager.get_built_in_profiles(),
+            command=self.apply_profile
+        )
+        self.profile_menu.pack(side="left", padx=5)
+        self.profile_menu.set("Apply a Profile...")
+        self.profile_menu.configure(state="disabled")
+
+        self.compare_profiles_button = ctk.CTkButton(
+            self.action_frame, text="Compare Profiles", command=self.open_comparison_window
+        )
+        self.compare_profiles_button.pack(side="left", padx=5)
+
+        self.generate_pre_commit_button = ctk.CTkButton(
+            self.action_frame, text="Generate Pre-commit Config", command=self.generate_pre_commit_config_file,
+            state="disabled"
+        )
+        self.generate_pre_commit_button.pack(side="left", padx=5)
 
         self.status_label = ctk.CTkLabel(self.top_frame, text="")
         self.status_label.pack(side="right", padx=10)
@@ -280,6 +373,8 @@ class App(ctk.CTk):
 
             self.run_in_thread(self._run_full_scan_worker, "run_full_scan", directory)
             self.update_rules_panel()
+            self.profile_menu.configure(state="normal")
+            self.generate_pre_commit_button.configure(state="normal")
 
     def update_results_panel(self, results):
         self.results_label.configure(text=f"Scan Results ({len(results)} violations)")
@@ -634,6 +729,49 @@ class App(ctk.CTk):
             self.current_directory, sim_config_data
         )
 
+    def apply_profile(self, profile_name):
+        if profile_name == "Apply a Profile...":
+            return
+
+        try:
+            profile_data = profile_manager.load_profile(profile_name)
+
+            # We don't need to apply to a config copy, as we'll just read the rules
+            # and then stage changes through the existing UI logic.
+            profile_ruff_config = profile_data.get("profile", {}).get("rules", {}).get("ruff", {})
+
+            # Create a dummy config to resolve the profile's effective rules
+            dummy_config = {"select": profile_ruff_config.get("select", []), "ignore": profile_ruff_config.get("ignore", [])}
+            profile_rules = self._get_rules_from_config(dummy_config)
+
+            # Reset staged changes
+            self.staged_changes = {}
+
+            # Stage changes for every managed rule based on the profile
+            for category_widgets in self.rule_widgets.values():
+                for rule_code in category_widgets['rules'].keys():
+                    if rule_code in profile_rules:
+                        self.staged_changes[rule_code] = "select"
+                    else:
+                        # We explicitly ignore rules not in the profile's select list
+                        self.staged_changes[rule_code] = "ignore"
+
+            # Ensure the UI reflects the newly staged changes
+            self.update_rules_panel()
+            self.simulate_button.configure(state="normal")
+            self.apply_button.configure(state="normal")
+
+            messagebox.showinfo(
+                "Profile Applied",
+                f"The '{profile_name}' profile has been staged. "
+                "Review the changes and click 'Simulate' or 'Apply'."
+            )
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to apply profile: {e}")
+        finally:
+            self.profile_menu.set("Apply a Profile...")
+
+
     def apply_changes(self):
         if not self.pyproject_data or not self.pyproject_path:
             return
@@ -652,6 +790,30 @@ class App(ctk.CTk):
 
         self.update_rules_panel()
         self.run_in_thread(self._run_full_scan_worker, "run_full_scan", self.current_directory)
+
+    def open_comparison_window(self):
+        ProfileComparisonWindow(self)
+
+    def generate_pre_commit_config_file(self):
+        """Generates and saves a .pre-commit-config.yaml file."""
+        try:
+            ruff_version = ruff_adapter.get_ruff_version()
+            config_content = ci_integration.generate_pre_commit_config(ruff_version)
+
+            filepath = filedialog.asksaveasfilename(
+                initialdir=self.current_directory,
+                initialfile=".pre-commit-config.yaml",
+                defaultextension=".yaml",
+                filetypes=[("YAML files", "*.yaml"), ("All files", "*.*")],
+            )
+
+            if filepath:
+                with open(filepath, "w") as f:
+                    f.write(config_content)
+                messagebox.showinfo("Success", f"Successfully saved {filepath}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to generate pre-commit config: {e}")
 
     def get_effective_config(self):
         effective_data = copy.deepcopy(self.pyproject_data)

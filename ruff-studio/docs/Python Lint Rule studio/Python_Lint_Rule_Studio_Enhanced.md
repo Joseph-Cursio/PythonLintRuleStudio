@@ -52,6 +52,18 @@ Python Linter Rule Studio provides three core capabilities that existing tools d
 - **Create leverage** for platform teams to enforce org-wide policies without becoming bottlenecks
 
 ---
+## Current Features (v0.1.0)
+
+Ruff Studio is currently in an early alpha stage. The core functionality is in place to provide a powerful, local-first experience for managing `ruff` configurations.
+
+- **Rule Discovery and Browsing**: Automatically discovers all available `ruff` rules from your installed version. Rules are displayed in a categorized, collapsible list, complete with official documentation scraped and cached from the web.
+- **`pyproject.toml` Integration**: Reads your existing `[tool.ruff.lint]` configuration from `pyproject.toml` to initialize the rule states.
+- **Interactive Staging Area**: Modify rule states (Select, Ignore, Default) for individual rules or entire categories. These changes are staged and do not modify your configuration file until you explicitly apply them.
+- **Impact Simulation**: Before committing to changes, run a simulation to see a diff of linting violations. This shows exactly which issues will be newly introduced and which will be fixed by your staged changes.
+- **Configuration Applicator**: Atomically writes your staged changes back to your `pyproject.toml` file, preserving formatting.
+- **Violation Viewer**: On selecting a project directory, the tool runs an initial scan and displays all current violations. The panel updates to show simulation results.
+
+---
 
 ## Market Context and Positioning
 
@@ -431,6 +443,10 @@ Several market forces make this the right time:
 
 - [x] Rule Catalog and Browser
   - [x] Collapsible categories for rules
+- [x] Live Preview and Playground (via "Simulate Changes")
+- [x] Configuration Engine (for `pyproject.toml`)
+- [x] Workspace Analyzer
+- [x] Violation Inspector (Results Panel)
 
 ### 1. Rule Catalog and Browser
 
