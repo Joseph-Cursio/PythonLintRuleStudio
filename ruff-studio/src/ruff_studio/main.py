@@ -6,8 +6,7 @@ import threading
 import queue
 import copy
 from unittest.mock import MagicMock
-from . import ruff_adapter, config_manager, workspace_analyzer, profile_manager
-from . import ruff_adapter, config_manager, workspace_analyzer, profile_manager, ci_integration
+from . import ruff_adapter, config_manager, workspace_analyzer, profile_manager, ci_integration, pylint_adapter
 
 class Tooltip:
     def __init__(self, widget, text):
@@ -296,8 +295,15 @@ class App(ctk.CTk):
 
     def _discover_rules_worker(self, command_name):
         try:
-            rules = ruff_adapter.discover_rules()
-            self.queue.put((command_name, rules))
+            ruff_rules = ruff_adapter.discover_rules()
+            pylint_rules = pylint_adapter.discover_rules()
+
+            # Combine rules, prefixing pylint categories to avoid name clashes
+            combined_rules = ruff_rules
+            for category, data in pylint_rules.items():
+                combined_rules[f"Pylint: {category}"] = data
+
+            self.queue.put((command_name, combined_rules))
         except (RuntimeError, FileNotFoundError) as e:
             self.queue.put(("error", e))
 

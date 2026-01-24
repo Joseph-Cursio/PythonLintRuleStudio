@@ -8,7 +8,7 @@ import datetime
 import sqlite3
 import logging
 from dataclasses import dataclass, field, asdict
-from . import ruff_adapter, database_manager
+from . import ruff_adapter, database_manager, pylint_adapter
 
 @dataclass
 class UnifiedViolationModel:
@@ -80,9 +80,10 @@ class WorkspaceAnalyzer:
             return []
 
         try:
-            raw_results = ruff_adapter.run_scan(directory)
+            # --- Ruff Scan ---
+            ruff_raw_results = ruff_adapter.run_scan(directory)
             violations = []
-            for result in raw_results:
+            for result in ruff_raw_results:
                 violation = UnifiedViolationModel(
                     rule_id=result["code"],
                     file_path=result["filename"],
@@ -91,6 +92,19 @@ class WorkspaceAnalyzer:
                     message=result["message"],
                 )
                 violations.append(violation)
+
+            # --- Pylint Scan ---
+            pylint_raw_results = pylint_adapter.run_scan(directory)
+            for result in pylint_raw_results:
+                violation = UnifiedViolationModel(
+                    rule_id=result["message-id"],
+                    file_path=result["path"],
+                    line_number=result["line"],
+                    column=result["column"],
+                    message=f"({result['symbol']}) {result['message']}",
+                )
+                violations.append(violation)
+
 
             self._clear_violations(conn)
             self._store_violations(conn, violations)
