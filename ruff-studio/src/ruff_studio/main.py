@@ -7,6 +7,7 @@ import queue
 import copy
 from unittest.mock import MagicMock
 from . import ruff_adapter, config_manager, workspace_analyzer, profile_manager
+from . import ruff_adapter, config_manager, workspace_analyzer, profile_manager, ci_integration
 
 class Tooltip:
     def __init__(self, widget, text):
@@ -188,6 +189,12 @@ class App(ctk.CTk):
         )
         self.compare_profiles_button.pack(side="left", padx=5)
 
+        self.generate_pre_commit_button = ctk.CTkButton(
+            self.action_frame, text="Generate Pre-commit Config", command=self.generate_pre_commit_config_file,
+            state="disabled"
+        )
+        self.generate_pre_commit_button.pack(side="left", padx=5)
+
         self.status_label = ctk.CTkLabel(self.top_frame, text="")
         self.status_label.pack(side="right", padx=10)
 
@@ -368,6 +375,7 @@ class App(ctk.CTk):
             self.run_in_thread(self._run_full_scan_worker, "run_full_scan", directory)
             self.update_rules_panel()
             self.profile_menu.configure(state="normal")
+            self.generate_pre_commit_button.configure(state="normal")
 
     def update_results_panel(self, results):
         self.results_label.configure(text=f"Scan Results ({len(results)} violations)")
@@ -786,6 +794,27 @@ class App(ctk.CTk):
 
     def open_comparison_window(self):
         ProfileComparisonWindow(self)
+
+    def generate_pre_commit_config_file(self):
+        """Generates and saves a .pre-commit-config.yaml file."""
+        try:
+            ruff_version = ruff_adapter.get_ruff_version()
+            config_content = ci_integration.generate_pre_commit_config(ruff_version)
+
+            filepath = filedialog.asksaveasfilename(
+                initialdir=self.current_directory,
+                initialfile=".pre-commit-config.yaml",
+                defaultextension=".yaml",
+                filetypes=[("YAML files", "*.yaml"), ("All files", "*.*")],
+            )
+
+            if filepath:
+                with open(filepath, "w") as f:
+                    f.write(config_content)
+                messagebox.showinfo("Success", f"Successfully saved {filepath}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to generate pre-commit config: {e}")
 
     def get_effective_config(self):
         effective_data = copy.deepcopy(self.pyproject_data)
