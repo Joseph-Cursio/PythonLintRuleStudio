@@ -6,8 +6,7 @@ import threading
 import queue
 import copy
 from unittest.mock import MagicMock
-from . import ruff_adapter, config_manager, workspace_analyzer, profile_manager
-from . import ruff_adapter, config_manager, workspace_analyzer, profile_manager, ci_integration
+from . import ruff_adapter, config_manager, workspace_analyzer, profile_manager, ci_integration, pylint_adapter
 
 class Tooltip:
     def __init__(self, widget, text):
@@ -296,8 +295,15 @@ class App(ctk.CTk):
 
     def _discover_rules_worker(self, command_name):
         try:
-            rules = ruff_adapter.discover_rules()
-            self.queue.put((command_name, rules))
+            ruff_rules = ruff_adapter.discover_rules()
+            pylint_rules = pylint_adapter.discover_rules()
+
+            # Combine rules, prefixing pylint categories to avoid name clashes
+            combined_rules = ruff_rules
+            for category, data in pylint_rules.items():
+                combined_rules[f"Pylint: {category}"] = data
+
+            self.queue.put((command_name, combined_rules))
         except (RuntimeError, FileNotFoundError) as e:
             self.queue.put(("error", e))
 
@@ -361,11 +367,18 @@ class App(ctk.CTk):
 
             if os.path.exists(self.pyproject_path):
                 self.pyproject_data = config_manager.read_pyproject(self.pyproject_path)
-                ruff_config = self.pyproject_data.get("tool", {}).get("ruff", {}).get("lint", {})
-                self.enabled_rules = self._get_rules_from_config(ruff_config)
+                ruff_config = config_manager.get_ruff_config(self.pyproject_data)
+                pylint_config = config_manager.get_pylint_config(self.pyproject_data)
+
+                ruff_enabled = self._get_ruff_rules_from_config(ruff_config)
+                pylint_enabled = self._get_pylint_rules_from_config(pylint_config)
+                self.enabled_rules = ruff_enabled.union(pylint_enabled)
             else:
                 self.pyproject_data = tomlkit.document()
-                self.enabled_rules = ruff_adapter.get_default_rules()
+                # Get default ruff rules, assume all pylint rules are enabled by default
+                ruff_enabled = ruff_adapter.get_default_rules()
+                pylint_enabled = self._get_pylint_rules_from_config({})
+                self.enabled_rules = ruff_enabled.union(pylint_enabled)
 
             for widget in self.results_frame.winfo_children():
                 if widget != self.results_label:
@@ -580,9 +593,9 @@ class App(ctk.CTk):
                 }
                 self.rule_widgets[category_name]['rules'][rule['code']] = rule_widget_data
 
-    def _get_rules_from_config(self, ruff_config):
+    def _get_ruff_rules_from_config(self, ruff_config):
         """
-        Get the set of enabled rule codes from a ruff config dict.
+        Get the set of enabled ruff rule codes from a ruff config dict.
         """
         selected_codes = ruff_config.get("select", [])
         ignored_codes = ruff_config.get("ignore", [])
@@ -618,6 +631,15 @@ class App(ctk.CTk):
     def is_rule_enabled(self, rule_code):
         return rule_code in self.enabled_rules
 
+    def is_pylint_rule(self, code):
+        """Checks if a rule code belongs to a Pylint category."""
+        for cat_name, cat_data in self.all_rules.items():
+            if cat_name.startswith("Pylint:"):
+                for rule in cat_data['rules']:
+                    if rule['code'] == code:
+                        return True
+        return False
+
     def _get_effective_rule_state(self, rule_code, category_prefix):
         """
         Calculates the final on/off state of a rule based on the hierarchy.
@@ -634,15 +656,48 @@ class App(ctk.CTk):
 
         return self.is_rule_enabled(rule_code)
 
-    def _get_explicit_rule_state(self, code, ruff_config):
+    def _get_pylint_rules_from_config(self, pylint_config):
         """
-        Determines if a rule or category is explicitly selected, ignored, or default.
+        Get the set of enabled pylint rule codes from a pylint config dict.
+        Pylint rules are on by default and explicitly disabled.
         """
-        if code in ruff_config.get("select", []):
-            return "select"
-        if code in ruff_config.get("ignore", []):
-            return "ignore"
-        return "default"
+        disabled_codes = pylint_config.get("disable", [])
+
+        all_pylint_codes = {
+            rule["code"]
+            for cat_name, cat in self.all_rules.items()
+            if cat_name.startswith("Pylint:")
+            for rule in cat["rules"]
+        }
+
+        enabled = set()
+        for code in all_pylint_codes:
+            is_disabled = False
+            for disabled in disabled_codes:
+                if code.startswith(disabled):
+                    is_disabled = True
+                    break
+            if not is_disabled:
+                enabled.add(code)
+        return enabled
+
+    def _get_explicit_rule_state(self, code, ruff_config, pylint_config=None):
+        """
+        Determines if a rule or category is explicitly selected, ignored, or default for a given linter.
+        """
+        if self.is_pylint_rule(code):
+            if pylint_config is not None:
+                if code in pylint_config.get("disable", []):
+                    return "ignore"
+                if code in pylint_config.get("enable", []):
+                    return "select"
+            return "default"
+        else:  # Assume ruff
+            if code in ruff_config.get("select", []):
+                return "select"
+            if code in ruff_config.get("ignore", []):
+                return "ignore"
+            return "default"
 
     def update_rules_panel(self):
         if not self.current_directory:
@@ -655,13 +710,15 @@ class App(ctk.CTk):
                         rb.configure(state="disabled")
             return
 
-        ruff_config = self.pyproject_data.get("tool", {}).get("ruff", {}).get("lint", {})
+        ruff_config = config_manager.get_ruff_config(self.pyproject_data)
+        pylint_config = config_manager.get_pylint_config(self.pyproject_data)
 
         for category_name, category_widgets in self.rule_widgets.items():
             prefix = category_widgets['prefix']
+            is_pylint = category_name.startswith("Pylint:")
 
             # Update category radio buttons
-            cat_state = self.staged_changes.get(prefix, self._get_explicit_rule_state(prefix, ruff_config))
+            cat_state = self.staged_changes.get(prefix, self._get_explicit_rule_state(prefix, ruff_config, pylint_config))
             category_widgets['radio_variable'].set(cat_state)
 
             any_rule_on = False
@@ -669,7 +726,7 @@ class App(ctk.CTk):
 
             for rule_code, rule_widget in category_widgets['rules'].items():
                 # Update rule radio buttons
-                rule_state = self.staged_changes.get(rule_code, self._get_explicit_rule_state(rule_code, ruff_config))
+                rule_state = self.staged_changes.get(rule_code, self._get_explicit_rule_state(rule_code, ruff_config, pylint_config))
                 rule_widget['radio_variable'].set(rule_state)
 
                 # Update effective state indicator
@@ -741,21 +798,37 @@ class App(ctk.CTk):
             # and then stage changes through the existing UI logic.
             profile_ruff_config = profile_data.get("profile", {}).get("rules", {}).get("ruff", {})
 
-            # Create a dummy config to resolve the profile's effective rules
-            dummy_config = {"select": profile_ruff_config.get("select", []), "ignore": profile_ruff_config.get("ignore", [])}
-            profile_rules = self._get_rules_from_config(dummy_config)
-
             # Reset staged changes
             self.staged_changes = {}
 
-            # Stage changes for every managed rule based on the profile
-            for category_widgets in self.rule_widgets.values():
-                for rule_code in category_widgets['rules'].keys():
-                    if rule_code in profile_rules:
-                        self.staged_changes[rule_code] = "select"
-                    else:
-                        # We explicitly ignore rules not in the profile's select list
-                        self.staged_changes[rule_code] = "ignore"
+            # --- Ruff Profile Application ---
+            profile_ruff_config = profile_data.get("profile", {}).get("rules", {}).get("ruff", {})
+            if profile_ruff_config:
+                dummy_ruff_config = {"select": profile_ruff_config.get("select", []), "ignore": profile_ruff_config.get("ignore", [])}
+                profile_ruff_rules = self._get_ruff_rules_from_config(dummy_ruff_config)
+                for category_name, category_widgets in self.rule_widgets.items():
+                    if category_name.startswith("Pylint:"):
+                        continue  # Skip pylint categories for ruff logic
+                    for rule_code in category_widgets['rules'].keys():
+                        if rule_code in profile_ruff_rules:
+                            self.staged_changes[rule_code] = "select"
+                        else:
+                            self.staged_changes[rule_code] = "ignore"
+
+            # --- Pylint Profile Application ---
+            profile_pylint_config = profile_data.get("profile", {}).get("rules", {}).get("pylint", {})
+            if profile_pylint_config:
+                # Pylint is default-on, so we only need to stage disabled rules
+                pylint_disabled_rules = profile_pylint_config.get("disable", [])
+                for category_name, category_widgets in self.rule_widgets.items():
+                    if not category_name.startswith("Pylint:"):
+                        continue
+                    for rule_code in category_widgets['rules'].keys():
+                        if rule_code in pylint_disabled_rules:
+                            self.staged_changes[rule_code] = "ignore"
+                        else:
+                            # If not explicitly disabled, it should be on (default)
+                            self.staged_changes[rule_code] = "default"
 
             # Ensure the UI reflects the newly staged changes
             self.update_rules_panel()
@@ -777,11 +850,10 @@ class App(ctk.CTk):
         if not self.pyproject_data or not self.pyproject_path:
             return
 
-        effective_config = self.get_effective_config()
-        (
-            self.pyproject_data.setdefault("tool", {})
-            .setdefault("ruff", {})["lint"]
-        ) = effective_config
+        ruff_config, pylint_config = self.get_effective_configs()
+
+        config_manager.update_ruff_config(self.pyproject_data, ruff_config)
+        config_manager.update_pylint_config(self.pyproject_data, pylint_config)
 
         config_manager.write_pyproject(self.pyproject_path, self.pyproject_data)
 
@@ -816,34 +888,57 @@ class App(ctk.CTk):
         except Exception as e:
             messagebox.showerror("Error", f"Failed to generate pre-commit config: {e}")
 
-    def get_effective_config(self):
-        effective_data = copy.deepcopy(self.pyproject_data)
-        ruff_config = (
-            effective_data.setdefault("tool", {})
-            .setdefault("ruff", {})
-            .setdefault("lint", {})
-        )
+    def get_effective_configs(self):
+        """
+        Calculates the effective ruff and pylint configurations based on staged changes.
+        Returns a tuple of (ruff_config, pylint_config).
+        """
+        # --- Ruff ---
+        ruff_config = config_manager.get_ruff_config(self.pyproject_data).copy()
+        ruff_select = set(ruff_config.get("select", []))
+        ruff_ignore = set(ruff_config.get("ignore", []))
 
-        final_select = set()
-        final_ignore = set()
+        # --- Pylint ---
+        pylint_config = config_manager.get_pylint_config(self.pyproject_data).copy()
+        pylint_enable = set(pylint_config.get("enable", []))
+        pylint_disable = set(pylint_config.get("disable", []))
 
-        # Process staged changes
         for code, state in self.staged_changes.items():
-            if state == "select":
-                final_select.add(code)
-            elif state == "ignore":
-                final_ignore.add(code)
+            if self.is_pylint_rule(code):
+                if state == "select":
+                    pylint_enable.add(code)
+                    pylint_disable.discard(code)
+                elif state == "ignore":
+                    pylint_disable.add(code)
+                    pylint_enable.discard(code)
+                elif state == "default":
+                    pylint_enable.discard(code)
+                    pylint_disable.discard(code)
+            else:  # Assume ruff
+                if state == "select":
+                    ruff_select.add(code)
+                    ruff_ignore.discard(code)
+                elif state == "ignore":
+                    ruff_ignore.add(code)
+                elif state == "default":
+                    ruff_select.discard(code)
+                    ruff_ignore.discard(code)
 
-        # Preserve unmanaged rules from the original config
-        original_select = set(ruff_config.get("select", []))
-        original_ignore = set(ruff_config.get("ignore", []))
+        ruff_config["select"] = sorted(list(ruff_select))
+        ruff_config["ignore"] = sorted(list(ruff_ignore))
 
-        final_select.update(s for s in original_select if s not in self.managed_prefixes and s not in self.managed_rules)
-        final_ignore.update(i for i in original_ignore if i not in self.managed_prefixes and i not in self.managed_rules)
+        # Only add lists if they are not empty
+        if pylint_enable:
+            pylint_config["enable"] = sorted(list(pylint_enable))
+        elif "enable" in pylint_config:
+            del pylint_config["enable"]
 
-        ruff_config["select"] = sorted(list(final_select))
-        ruff_config["ignore"] = sorted(list(final_ignore))
-        return ruff_config
+        if pylint_disable:
+            pylint_config["disable"] = sorted(list(pylint_disable))
+        elif "disable" in pylint_config:
+            del pylint_config["disable"]
+
+        return ruff_config, pylint_config
 
     def navigate_items(self, event):
         if not self.selected_item or not self.navigable_items:
