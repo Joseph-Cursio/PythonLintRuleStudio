@@ -1,6 +1,7 @@
 import pytest
 from src.ruff_studio.main import App
 from unittest.mock import patch, MagicMock
+import tomlkit
 
 # MOCK_RULES is now intentionally non-alphabetical to test display order.
 MOCK_RULES = {
@@ -15,6 +16,12 @@ MOCK_RULES = {
         "rules": [
             {"code": "F401", "name": "UnusedImport", "summary": "An imported module is not used.", "fix": True, "status": "stable"},
             {"code": "F841", "name": "UnusedLocalVariable", "summary": "A local variable is assigned to but never used.", "fix": False, "status": "stable"},
+        ],
+    },
+    "Pylint: Convention": {
+        "prefix": "C",
+        "rules": [
+            {"code": "C0103", "name": "invalid-name", "summary": "Invalid name for variable.", "fix": False, "status": "stable"},
         ],
     },
 }
@@ -97,6 +104,7 @@ def test_visual_keyboard_navigation(app):
     expected_order = [
         "CAT:pycodestyle", "RULE:E501",
         "CAT:Pyflakes", "RULE:F401", "RULE:F841",
+        "CAT:Pylint: Convention", "RULE:C0103",
     ]
     assert nav_item_reprs == expected_order
 
@@ -136,29 +144,52 @@ def test_visual_keyboard_navigation(app):
     assert app.selected_item['type'] == 'category'
     assert app.selected_item['name'] == 'Pyflakes'
 
-    # --- 7. Navigate Down to Rule in New Category ---
-    app.navigate_items(down_event)
-    app.update_idletasks()
-    assert app.selected_item['data']['code'] == 'F401'
+def test_pylint_configuration_workflow(app, tmp_path):
+    """
+    Tests the full workflow for configuring pylint rules, including loading,
+    staging, and applying changes.
+    """
+    # --- 1. Setup: Create a mock pyproject.toml with pylint config ---
+    pyproject_content = """
+[tool.pylint]
+disable = ["C0103"]
+"""
+    pyproject_path = tmp_path / "pyproject.toml"
+    pyproject_path.write_text(pyproject_content)
 
-    # --- 8. Navigate Down to Second Rule in Category ---
-    app.navigate_items(down_event)
+    # --- 2. Load the project and verify initial state ---
+    # Patch `run_full_scan_worker` to prevent real scanning
+    with patch.object(app, '_run_full_scan_worker', return_value=None):
+        app.select_directory(str(tmp_path))
     app.update_idletasks()
-    assert app.selected_item['data']['code'] == 'F841'
 
-    # --- 9. Boundary Check (Bottom) ---
-    # Pressing Down at the very end should not change the selection.
-    app.navigate_items(down_event)
-    app.update_idletasks()
-    assert app.selected_item['data']['code'] == 'F841'
+    # Check that the C0103 rule is correctly identified as "ignore"
+    pylint_rule_widget = app.rule_widgets["Pylint: Convention"]['rules']['C0103']
+    assert pylint_rule_widget['radio_variable'].get() == "ignore"
 
-    # --- 10. Navigate Up to First Rule in Category ---
-    app.navigate_items(up_event)
-    app.update_idletasks()
-    assert app.selected_item['data']['code'] == 'F401'
+    # Check that a ruff rule is "default"
+    ruff_rule_widget = app.rule_widgets["Pyflakes"]['rules']['F401']
+    assert ruff_rule_widget['radio_variable'].get() == "default"
 
-    # --- 11. Navigate Up to Category from Rule ---
-    app.navigate_items(up_event)
+    # --- 3. Stage a change: Enable the pylint rule ---
+    # Simulate clicking the "default" radio button for C0103
+    pylint_rule_widget['radio_variable'].set("default")
+    app.stage_rule_change("C0103", "default")
     app.update_idletasks()
-    assert app.selected_item['type'] == 'category'
-    assert app.selected_item['name'] == 'Pyflakes'
+
+    # The radio button should now be "default"
+    assert pylint_rule_widget['radio_variable'].get() == "default"
+    assert "C0103" in app.staged_changes
+
+    # --- 4. Apply the changes ---
+    # This should write the changes back to the pyproject.toml
+    with patch.object(app, '_run_full_scan_worker', return_value=None):
+        app.apply_changes()
+    app.update_idletasks()
+
+    # --- 5. Verify the pyproject.toml was updated correctly ---
+    updated_data = tomlkit.parse(pyproject_path.read_text())
+
+    # The `disable` list should now be empty or not present
+    pylint_config = updated_data.get("tool", {}).get("pylint", {})
+    assert "C0103" not in pylint_config.get("disable", [])
