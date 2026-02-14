@@ -5,14 +5,44 @@ import subprocess
 import json
 import sys
 import logging
+import re
+from . import cache_manager
+
+def get_pylint_version():
+    """
+    Retrieves the current pylint version.
+    """
+    try:
+        python_executable = sys.executable
+        result = subprocess.run(
+            [python_executable, "-m", "pylint", "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        # Pylint's version string is something like: "pylint 2.17.4"
+        match = re.search(r"pylint (\d+\.\d+\.\d+)", result.stdout)
+        if match:
+            return match.group(1)
+        return None
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
 
 def discover_rules():
     """
-    Discovers available pylint rules by running pylint with --list-msgs.
+    Discovers available pylint rules, using a cache to speed up subsequent runs.
     """
+    version = get_pylint_version()
+    cache_key = "pylint_rules"
+    cached_data = cache_manager.get_cache(cache_key)
+
+    if cached_data and cached_data.get("version") == version:
+        logging.info(f"Loaded pylint rules from cache for version {version}.")
+        return cached_data.get("rules", {})
+
+    logging.info("No valid cache found for pylint rules. Discovering from scratch.")
+
     try:
-        # It's better to use the same Python executable that's running the app
-        # to ensure we're getting pylint from the correct environment.
         python_executable = sys.executable
         result = subprocess.run(
             [python_executable, "-m", "pylint", "--list-msgs-json"],
@@ -21,13 +51,6 @@ def discover_rules():
             check=True,
         )
         rules_json = json.loads(result.stdout)
-
-        # We will need to categorize these. Pylint messages are prefixed:
-        # C: Convention
-        # R: Refactor
-        # W: Warning
-        # E: Error
-        # F: Fatal
 
         categories = {
             "Convention": {"prefix": "C", "rules": []},
@@ -45,14 +68,18 @@ def discover_rules():
                         "code": rule["msgid"],
                         "name": rule["symbol"],
                         "summary": rule["msg"],
-                        "fix": "no", # Pylint doesn't have a stable autofix mechanism like ruff
-                        "status": "stable", # Assuming all pylint rules are stable
+                        "fix": "no",
+                        "status": "stable",
                         "documentation": rule.get("description", "")
                     })
                     break
 
-        # Filter out empty categories
-        return {name: data for name, data in categories.items() if data["rules"]}
+        categorized_rules = {name: data for name, data in categories.items() if data["rules"]}
+
+        cache_manager.set_cache(cache_key, {"version": version, "rules": categorized_rules})
+        logging.info(f"Pylint rules for version {version} have been cached.")
+
+        return categorized_rules
 
     except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError) as e:
         logging.error(f"Failed to discover pylint rules: {e}")

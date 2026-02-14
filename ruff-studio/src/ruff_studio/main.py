@@ -1036,6 +1036,17 @@ class App(ctk.CTk):
             wraplength=250, justify="left"
         ).pack(pady=5, anchor="w")
 
+        if rule.get("documentation") is None and not self.is_pylint_rule(rule['code']):
+            # If documentation is missing, and it's a ruff rule, scrape it now.
+            self.status_label.configure(text=f"Fetching docs for {rule['code']}...")
+            self.update_idletasks()
+            # This runs in the main thread, which can cause a brief UI freeze.
+            # For a better user experience, this could be moved to a background thread.
+            rule['documentation'] = ruff_adapter.scrape_rule_documentation(rule['name'])
+            self.status_label.configure(text="")
+            # No need to update the cache here, as the rule object is updated in-memory
+            # and will be re-cached the next time the app starts if rules are re-discovered.
+
         if rule.get("documentation"):
             # Use a Textbox for better scrolling and text selection
             doc_textbox = ctk.CTkTextbox(self.info_frame, wrap="word", height=400)
