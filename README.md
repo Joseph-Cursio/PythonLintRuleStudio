@@ -40,8 +40,9 @@ Ruff Studio is currently in an early alpha stage. Core functionality includes:
 
 ### Installation
 
-1.  Navigate to the `ruff-studio` directory:
+1.  Clone the repository:
     ```bash
+    git clone <repository-url>
     cd ruff-studio
     ```
 
@@ -52,7 +53,7 @@ Ruff Studio is currently in an early alpha stage. Core functionality includes:
 
 ### Usage
 
-To run the application, execute the following command:
+To run the application, execute the following command from the `ruff-studio` directory:
 
 ```bash
 poetry run python -m src.ruff_studio.main
