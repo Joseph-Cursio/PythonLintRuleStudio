@@ -44,7 +44,7 @@ class ProfileComparisonWindow(ctk.CTkToplevel):
         self.grid_columnconfigure(0, weight=1)
 
         # --- Top Frame for selections ---
-        top_frame = ck.CTkFrame(self)
+        top_frame = ctk.CTkFrame(self)
         top_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
 
         self.profiles = profile_manager.get_built_in_profiles()
