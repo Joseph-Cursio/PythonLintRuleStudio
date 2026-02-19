@@ -19,3 +19,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+Ruff Studio is an independent project and is not affiliated with, sponsored by, or endorsed by the creators of Ruff or Pylint. This project relies on the following tools:
+- Ruff (https://github.com/astral-sh/ruff)
+- Pylint (https://github.com/pylint-dev/pylint)
