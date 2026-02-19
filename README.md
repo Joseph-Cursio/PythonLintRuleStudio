@@ -1,4 +1,5 @@
 # THIS IS A VIBE-CODING EXPERIMENT.
+Most of the text below was hallucinated by different AI systems. I want to see how far I can go without looking at the code or tests. I ran this program a few times on a very simple Python program.
 
 # Python Linter Rule Studio (Ruff Studio)
 
