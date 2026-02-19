@@ -57,3 +57,11 @@ To run the application, execute the following command:
 ```bash
 poetry run python -m src.ruff_studio.main
 ```
+
+## Credits & Acknowledgments
+
+Ruff Studio is an interface and governance tool that relies heavily on the incredible work of the following open-source projects:
+
+*   **[Ruff](https://github.com/astral-sh/ruff)**: The extremely fast Python linter, which provides the core rule set and documentation used by this application.
+*   **[Pylint](https://github.com/pylint-dev/pylint)**: The classic Python static code analysis tool, supported as a secondary linter.
+*   **[CustomTkinter](https://github.com/TomSchimansky/CustomTkinter)**: The UI library used to build the modern desktop interface.

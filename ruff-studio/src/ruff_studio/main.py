@@ -1032,6 +1032,12 @@ class App(ctk.CTk):
         ctk.CTkLabel(
             self.info_frame, text=f"Code: {rule['code']}", wraplength=250
         ).pack(pady=5, anchor="w")
+
+        source = "Pylint" if self.is_pylint_rule(rule['code']) else "Ruff"
+        ctk.CTkLabel(
+            self.info_frame, text=f"Source: {source} Linter", wraplength=250,
+            font=("", 12, "italic")
+        ).pack(pady=5, anchor="w")
         ctk.CTkLabel(
             self.info_frame, text=f"Name: {rule['name']}", wraplength=250
         ).pack(pady=5, anchor="w")

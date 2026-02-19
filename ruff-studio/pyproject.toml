@@ -2,6 +2,7 @@
 name = "ruff-studio"
 version = "0.1.0"
 description = ""
+license = "MIT"
 authors = [
     {name = "google-labs-jules[bot]",email = "161369871+google-labs-jules[bot]@users.noreply.github.com"}
 ]
