@@ -194,6 +194,12 @@ class App(ctk.CTk):
         )
         self.generate_pre_commit_button.pack(side="left", padx=5)
 
+        self.generate_github_actions_button = ctk.CTkButton(
+            self.action_frame, text="Generate GitHub Actions Config", command=self.generate_github_actions_config_file,
+            state="disabled"
+        )
+        self.generate_github_actions_button.pack(side="left", padx=5)
+
         self.status_label = ctk.CTkLabel(self.top_frame, text="")
         self.status_label.pack(side="right", padx=10)
 
@@ -397,6 +403,7 @@ class App(ctk.CTk):
             self.update_rules_panel()
             self.profile_menu.configure(state="normal")
             self.generate_pre_commit_button.configure(state="normal")
+            self.generate_github_actions_button.configure(state="normal")
 
     def update_results_panel(self, results):
         self.results_label.configure(text=f"Scan Results ({len(results)} violations)")
@@ -671,6 +678,9 @@ class App(ctk.CTk):
         """
         disabled_codes = pylint_config.get("disable", [])
 
+        if not isinstance(self.all_rules, dict):
+            return set()
+
         all_pylint_codes = {
             rule["code"]
             for cat_name, cat in self.all_rules.items()
@@ -895,6 +905,33 @@ class App(ctk.CTk):
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to generate pre-commit config: {e}")
+
+    def generate_github_actions_config_file(self):
+        """Generates and saves a GitHub Actions workflow file."""
+        try:
+            ruff_version = ruff_adapter.get_ruff_version()
+            config_content = ci_integration.generate_github_actions_config(ruff_version)
+
+            # Ensure .github/workflows directory exists as a suggestion
+            default_dir = self.current_directory
+            github_workflows_dir = os.path.join(self.current_directory, ".github", "workflows")
+
+            filepath = filedialog.asksaveasfilename(
+                initialdir=github_workflows_dir if os.path.exists(github_workflows_dir) else default_dir,
+                initialfile="ruff-lint.yml",
+                defaultextension=".yml",
+                filetypes=[("YAML files", "*.yml;*.yaml"), ("All files", "*.*")],
+            )
+
+            if filepath:
+                # Create directory if it doesn't exist
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                with open(filepath, "w") as f:
+                    f.write(config_content)
+                messagebox.showinfo("Success", f"Successfully saved {filepath}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to generate GitHub Actions config: {e}")
 
     def get_effective_configs(self):
         """

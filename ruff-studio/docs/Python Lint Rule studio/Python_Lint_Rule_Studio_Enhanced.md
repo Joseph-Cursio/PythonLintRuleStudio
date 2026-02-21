@@ -447,6 +447,11 @@ Several market forces make this the right time:
 - [x] Configuration Engine (for `pyproject.toml`)
 - [x] Workspace Analyzer
 - [x] Violation Inspector (Results Panel)
+- [x] Multi-linter support (Pylint)
+- [x] Configuration Profiles
+- [x] Profile Comparison
+- [x] CI Integration (Pre-commit)
+- [x] Rule Caching
 
 ### 1. Rule Catalog and Browser
 
@@ -1642,16 +1647,16 @@ class CIProvider:
 **Goal:** Add collaboration and governance features to enable team adoption. Support org-wide rollouts.
 
 **Features:**
-- [x] Git-based proposal workflow: create, review, approve
-- [x] Approval policies: require N approvers, role-based rules
-- [x] Audit log: immutable history of all config changes
+- [ ] Git-based proposal workflow: create, review, approve
+- [ ] Approval policies: require N approvers, role-based rules
+- [ ] Audit log: immutable history of all config changes
 - [x] Configuration profiles: 7 built-in profiles, custom profiles
 - [x] Profile comparison and inheritance
-- [x] Migration wizard: phased rollout plans
+- [ ] Migration wizard: phased rollout plans
 - [x] Pre-commit config generator
 - [x] GitHub Actions config generator
-- [x] Multi-repo dashboard: compare quality across repos
-- [x] Violation suppression with expiration
+- [ ] Multi-repo dashboard: compare quality across repos
+- [ ] Violation suppression with expiration
 
 **Success Criteria:**
 - 3 companies roll out to 3+ teams each
@@ -1672,18 +1677,18 @@ class CIProvider:
 
 **Features:**
 - [x] pylint adapter with 300+ rules
-- [x] flake8 adapter with plugins (e.g., flake8-bugbear)
-- [x] mypy adapter for type checking rules
-- [x] bandit adapter for security scanning
-- [x] Notebook linting: `.ipynb` support with cell-level violations
-- [x] VS Code extension (beta): inline violations, deep links
-- [x] PyCharm plugin (beta): inspection integration
-- [x] GitLab CI config generator
-- [x] CircleCI config generator
-- [x] PR annotation: post violations as comments on GitHub/GitLab PRs
-- [x] Slack integration: notifications for proposals, violations
-- [x] Advanced analytics: team performance, rule effectiveness ROI
-- [x] Exportable reports: PDF for executives, CSV for data analysis
+- [ ] flake8 adapter with plugins (e.g., flake8-bugbear)
+- [ ] mypy adapter for type checking rules
+- [ ] bandit adapter for security scanning
+- [ ] Notebook linting: `.ipynb` support with cell-level violations
+- [ ] VS Code extension (beta): inline violations, deep links
+- [ ] PyCharm plugin (beta): inspection integration
+- [ ] GitLab CI config generator
+- [ ] CircleCI config generator
+- [ ] PR annotation: post violations as comments on GitHub/GitLab PRs
+- [ ] Slack integration: notifications for proposals, violations
+- [ ] Advanced analytics: team performance, rule effectiveness ROI
+- [ ] Exportable reports: PDF for executives, CSV for data analysis
 
 **Success Criteria:**
 - Support 90% of Python linters used in production
@@ -1703,17 +1708,17 @@ class CIProvider:
 **Goal:** Support large enterprises with centralized management, compliance, and collaboration.
 
 **Features:**
-- [x] Cloud sync (optional): sync configs, profiles, violations across machines
-- [x] Team collaboration: shared workspaces, comments, real-time updates
-- [x] SSO integration: SAML, OAuth for enterprise identity providers
-- [x] Advanced RBAC: fine-grained permissions, custom roles
-- [x] Cross-org analytics: compare your org to anonymized benchmarks
-- [x] Dependency scanning: integrate with Snyk, Dependabot
-- [x] Secrets detection: integrate with GitGuardian, TruffleHog
-- [x] Custom rule authoring: write and share custom Ruff rules
-- [x] API for automation: REST API for CI, internal tools
-- [x] SLA-based alerting: notify if critical violations not fixed within SLA
-- [x] Advanced exports: Power BI, Tableau connectors
+- [ ] Cloud sync (optional): sync configs, profiles, violations across machines
+- [ ] Team collaboration: shared workspaces, comments, real-time updates
+- [ ] SSO integration: SAML, OAuth for enterprise identity providers
+- [ ] Advanced RBAC: fine-grained permissions, custom roles
+- [ ] Cross-org analytics: compare your org to anonymized benchmarks
+- [ ] Dependency scanning: integrate with Snyk, Dependabot
+- [ ] Secrets detection: integrate with GitGuardian, TruffleHog
+- [ ] Custom rule authoring: write and share custom Ruff rules
+- [ ] API for automation: REST API for CI, internal tools
+- [ ] SLA-based alerting: notify if critical violations not fixed within SLA
+- [ ] Advanced exports: Power BI, Tableau connectors
 
 **Success Criteria:**
 - 10 enterprise customers (>100 developers each)
