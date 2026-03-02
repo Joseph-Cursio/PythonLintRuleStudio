@@ -52,11 +52,16 @@ def app():
     """
     # Patch the `run_in_thread` method to prevent background tasks from
     # running during the test and interfering with our mock data.
-    with patch.object(App, 'run_in_thread', return_value=None):
-        with patch.object(StudioController, 'run_in_thread', return_value=None):
+    # Also patch messagebox globally for all UI tests to prevent blocking.
+    with patch.object(App, 'run_in_thread', return_value=None), \
+         patch.object(StudioController, 'run_in_thread', return_value=None), \
+         patch('tkinter.messagebox.showinfo'), \
+         patch('tkinter.messagebox.showerror'), \
+         patch('tkinter.messagebox.showwarning'), \
+         patch('tkinter.messagebox.askyesno', return_value=True):
             app_instance = App()
 
-    # Manually set the rules data via controller
+            # Manually set the rules data via controller
     app_instance.controller.all_rules = MOCK_RULES
     app_instance.controller.current_directory = "/fake/dir"
     app_instance.controller.pyproject_path = "/fake/dir/pyproject.toml"
@@ -300,13 +305,12 @@ def test_proposals_dashboard_reject(mock_get, mock_update, app):
               "config_before": "", "config_after": ""}
     mock_get.return_value = [mock_p]
     
-    with patch('tkinter.messagebox.showinfo'):
-        dash = ProposalsDashboard(app)
-        dash.current_proposal = mock_p
-        dash.reject()
-        mock_update.assert_called_once_with(
-            app.controller.analyzer.conn, "1", "rejected"
-        )
+    dash = ProposalsDashboard(app)
+    dash.current_proposal = mock_p
+    dash.reject()
+    mock_update.assert_called_once_with(
+        app.controller.analyzer.conn, "1", "rejected"
+    )
 
 def test_select_directory_no_config(app, tmp_path):
     """Tests select_directory when no pyproject.toml exists."""
@@ -372,12 +376,11 @@ def test_proposal_window_commit(mock_create, mock_clean, mock_branch, mock_commi
     """Tests the create_and_commit path in ProposalWindow."""
     from ruff_studio.ui.proposal_window import ProposalWindow
     
-    with patch('tkinter.messagebox.showinfo'):
-        with patch('ruff_studio.config_manager.read_pyproject_text', return_value=""):
-            with patch('ruff_studio.config_manager.write_pyproject'):
-                win = ProposalWindow(app, "b", "a", {})
-                win.title_entry.insert(0, "Title")
-                win.create_and_commit()
+    with patch('ruff_studio.config_manager.read_pyproject_text', return_value=""):
+        with patch('ruff_studio.config_manager.write_pyproject'):
+            win = ProposalWindow(app, "b", "a", {})
+            win.title_entry.insert(0, "Title")
+            win.create_and_commit()
         
         mock_branch.assert_called_once()
         mock_commit.assert_called_once()
