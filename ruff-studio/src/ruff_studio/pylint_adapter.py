@@ -74,14 +74,20 @@ def discover_rules():
                     })
                     break
 
-        categorized_rules = {name: data for name, data in categories.items() if data["rules"]}
+        categorized_rules = {
+            name: data for name, data in categories.items() if data["rules"]
+        }
 
-        cache_manager.set_cache(cache_key, {"version": version, "rules": categorized_rules})
+        cache_manager.set_cache(
+            cache_key, {"version": version, "rules": categorized_rules}
+        )
         logging.info(f"Pylint rules for version {version} have been cached.")
 
         return categorized_rules
 
-    except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError) as e:
+    except (
+        subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError
+    ) as e:
         logging.error(f"Failed to discover pylint rules: {e}")
         return {}
 

@@ -1,4 +1,3 @@
-import pytest
 import yaml
 from ruff_studio import ci_integration
 

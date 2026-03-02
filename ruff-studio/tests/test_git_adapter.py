@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import patch, MagicMock
 from ruff_studio import git_adapter
 import subprocess
@@ -31,10 +30,15 @@ def test_create_branch_success(mock_run):
 def test_commit_changes_success(mock_run):
     """Tests staging and committing changes."""
     mock_run.return_value = MagicMock(returncode=0)
-    assert git_adapter.commit_changes("/path/to/repo", "Commit Message", files=["file1.py"]) is True
+    result = git_adapter.commit_changes(
+        "/path/to/repo", "Commit Message", files=["file1.py"]
+    )
+    assert result is True
     
     # Check that add was called
-    mock_run.assert_any_call(["git", "add", "file1.py"], cwd="/path/to/repo", check=True)
+    mock_run.assert_any_call(
+        ["git", "add", "file1.py"], cwd="/path/to/repo", check=True
+    )
     # Check that commit was called
     mock_run.assert_any_call(
         ["git", "commit", "-m", "Commit Message"],

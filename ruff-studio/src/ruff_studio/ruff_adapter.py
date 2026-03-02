@@ -111,7 +111,8 @@ def discover_rules():
     categorized_rules = {}
     for i, rule_data in enumerate(all_rules_raw):
         logging.info(
-            f"Processing ruff rule '{rule_data['name']}' ({i+1}/{len(all_rules_raw)})..."
+            f"Processing ruff rule '{rule_data['name']}' "
+            f"({i+1}/{len(all_rules_raw)})..."
         )
         # Add status field
         if rule_data.get("deprecated"):
@@ -192,7 +193,10 @@ def get_default_rules():
             output = _run_ruff_command(["check", dummy_file, "--show-settings"])
 
             # Use regex to find the linter.rules.enabled list
-            match = re.search(r"linter\.rules\.enabled = \[\s*([^]]+?)\s*\]", output, re.DOTALL)
+            match = re.search(
+                r"linter\.rules\.enabled = \[\s*([^]]+?)\s*\]", 
+                output, re.DOTALL
+            )
             if not match:
                 return set()
 

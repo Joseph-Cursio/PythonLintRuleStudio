@@ -1,9 +1,8 @@
 import unittest
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 import os
 import json
 from ruff_studio.ruff_adapter import discover_rules, run_scan, get_default_rules
-from ruff_studio import cache_manager
 
 class TestRuffAdapter(unittest.TestCase):
     def setUp(self):

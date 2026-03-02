@@ -1,5 +1,3 @@
-import os
-import pytest
 from ruff_studio import profile_manager
 
 def test_get_built_in_profiles():
@@ -24,6 +22,6 @@ def test_compare_profiles():
     assert "select_only_in_2" in diff
     assert "common_select" in diff
     
-    # Check for some expected differences based on common knowledge of standard/strict profiles
-    # or just that the result is a dict with lists.
+    # Check for some expected differences based on common knowledge of 
+    # standard/strict profiles or just that the result is a dict with lists.
     assert isinstance(diff["select_only_in_2"], list)

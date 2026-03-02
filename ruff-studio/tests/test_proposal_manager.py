@@ -54,9 +54,13 @@ def test_get_proposals_by_status(db_conn):
 
 def test_update_proposal_implemented(db_conn):
     """Tests updating a proposal to 'implemented' status."""
-    proposal_id = proposal_manager.create_proposal(db_conn, "Test", "Rationale", "Before", "After", {})
+    proposal_id = proposal_manager.create_proposal(
+        db_conn, "Test", "Rationale", "Before", "After", {}
+    )
     
-    success = proposal_manager.update_proposal_status(db_conn, proposal_id, "implemented")
+    success = proposal_manager.update_proposal_status(
+        db_conn, proposal_id, "implemented"
+    )
     assert success is True
     
     proposals = proposal_manager.get_proposals(db_conn, status="implemented")

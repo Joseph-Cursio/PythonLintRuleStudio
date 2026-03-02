@@ -9,7 +9,8 @@ def mock_cache_file():
     mock_path.is_file.return_value = True
 
     with patch('ruff_studio.cache_manager.CACHE_FILE', mock_path):
-        with patch('builtins.open', mock_open(read_data='{"test_key": {"version": "1.0", "data": "test_data"}}')) as mock_file:
+        read_data = '{"test_key": {"version": "1.0", "data": "test_data"}}'
+        with patch('builtins.open', mock_open(read_data=read_data)) as mock_file:
             yield mock_file
 
 def test_get_cache_existing_key():

@@ -58,8 +58,14 @@ class WorkspaceAnalyzer:
             cursor = conn.cursor()
             for violation in violations:
                 cursor.execute("""
-                    INSERT INTO violations (id, rule_id, file_path, line_number, column, message, timestamp)
-                    VALUES (:id, :rule_id, :file_path, :line_number, :column, :message, :timestamp)
+                    INSERT INTO violations (
+                        id, rule_id, file_path, line_number, column, 
+                        message, timestamp
+                    )
+                    VALUES (
+                        :id, :rule_id, :file_path, :line_number, :column, 
+                        :message, :timestamp
+                    )
                 """, asdict(violation))
             conn.commit()
         except sqlite3.Error as e:

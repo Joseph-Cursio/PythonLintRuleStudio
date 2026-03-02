@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import MagicMock
 import tomlkit
 from ruff_studio.main import App
 

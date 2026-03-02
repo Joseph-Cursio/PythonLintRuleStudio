@@ -1,4 +1,3 @@
-import pytest
 from ruff_studio import pylint_adapter
 from unittest.mock import patch, MagicMock
 

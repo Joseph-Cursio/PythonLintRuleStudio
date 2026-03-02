@@ -5,23 +5,39 @@ import tomlkit
 
 # MOCK_RULES is now intentionally non-alphabetical to test display order.
 MOCK_RULES = {
-    "pycodestyle": {
+    "Error": {
         "prefix": "E",
         "rules": [
-            {"code": "E501", "name": "LineTooLong", "summary": "Line too long.", "fix": False, "status": "stable"},
+            {
+                "code": "E501", "name": "LineTooLong", 
+                "summary": "Line too long.", "fix": False, "status": "stable"
+            },
         ],
     },
+
     "Pyflakes": {
         "prefix": "F",
         "rules": [
-            {"code": "F401", "name": "UnusedImport", "summary": "An imported module is not used.", "fix": True, "status": "stable"},
-            {"code": "F841", "name": "UnusedLocalVariable", "summary": "A local variable is assigned to but never used.", "fix": False, "status": "stable"},
+            {
+                "code": "F401", "name": "UnusedImport", 
+                "summary": "An imported module is not used.", 
+                "fix": True, "status": "stable"
+            },
+            {
+                "code": "F841", "name": "UnusedLocalVariable", 
+                "summary": "A local variable is assigned but never used.", 
+                "fix": False, "status": "stable"
+            },
         ],
     },
     "Pylint: Convention": {
         "prefix": "C",
         "rules": [
-            {"code": "C0103", "name": "invalid-name", "summary": "Invalid name for variable.", "fix": False, "status": "stable"},
+            {
+                "code": "C0103", "name": "invalid-name", 
+                "summary": "Invalid name for variable.", 
+                "fix": False, "status": "stable"
+            },
         ],
     },
 }
@@ -102,7 +118,7 @@ def test_visual_keyboard_navigation(app):
             nav_item_reprs.append(f"RULE:{item['data']['code']}")
 
     expected_order = [
-        "CAT:pycodestyle", "RULE:E501",
+        "CAT:Error", "RULE:E501",
         "CAT:Pyflakes", "RULE:F401", "RULE:F841",
         "CAT:Pylint: Convention", "RULE:C0103",
     ]
@@ -115,7 +131,9 @@ def test_visual_keyboard_navigation(app):
 
     # --- 2. Start Selection ---
     # Start by selecting the first rule, E501.
-    app.show_rule_info(app.navigable_items[1]['data'], app.navigable_items[1]['category_name'])
+    target_rule = app.navigable_items[1]['data']
+    target_cat = app.navigable_items[1]['category_name']
+    app.show_rule_info(target_rule, target_cat)
     app.update_idletasks()
     assert app.selected_item['data']['code'] == 'E501'
 
@@ -124,13 +142,13 @@ def test_visual_keyboard_navigation(app):
     app.navigate_items(up_event)
     app.update_idletasks()
     assert app.selected_item['type'] == 'category'
-    assert app.selected_item['name'] == 'pycodestyle'
+    assert app.selected_item['name'] == 'Error'
 
     # --- 4. Boundary Check (Top) ---
     # Pressing Up again should not change the selection.
     app.navigate_items(up_event)
     app.update_idletasks()
-    assert app.selected_item['name'] == 'pycodestyle'
+    assert app.selected_item['name'] == 'Error'
 
     # --- 5. Navigate Down to First Rule ---
     app.navigate_items(down_event)
@@ -183,8 +201,9 @@ disable = ["C0103"]
 
     # --- 4. Apply the changes ---
     # This should write the changes back to the pyproject.toml
+    # Disable proposal window for tests to apply immediately
     with patch.object(app, '_run_full_scan_worker', return_value=None):
-        app.apply_changes()
+        app.apply_changes(show_proposal_window=False)
     app.update_idletasks()
 
     # --- 5. Verify the pyproject.toml was updated correctly ---

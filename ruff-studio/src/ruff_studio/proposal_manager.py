@@ -1,5 +1,6 @@
 """
-Handles the logic for creating, retrieving, and updating linting configuration proposals.
+Handles logic for creating, retrieving, and updating linting 
+configuration proposals.
 """
 import uuid
 import json
@@ -7,7 +8,10 @@ import logging
 import sqlite3
 from datetime import datetime
 
-def create_proposal(conn, title, rationale, config_before, config_after, impact_simulation, author="User"):
+def create_proposal(
+    conn, title, rationale, config_before, config_after, 
+    impact_simulation, author="User"
+):
     """Creates a new proposal in the database."""
     proposal_id = str(uuid.uuid4())
     impact_json = json.dumps(impact_simulation)
@@ -16,12 +20,17 @@ def create_proposal(conn, title, rationale, config_before, config_after, impact_
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO proposals (
-                id, title, rationale, config_before, config_after, impact_simulation, author, status
+                id, title, rationale, config_before, config_after, 
+                impact_simulation, author, status
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (proposal_id, title, rationale, config_before, config_after, impact_json, author, "pending"))
+        """, (
+            proposal_id, title, rationale, config_before, config_after, 
+            impact_json, author, "pending"
+        ))
         
         # Log the event in audit_log
-        log_event(conn, "proposal_created", author, {"proposal_id": proposal_id, "title": title})
+        details = {"proposal_id": proposal_id, "title": title}
+        log_event(conn, "proposal_created", author, details)
         
         conn.commit()
         return proposal_id
@@ -34,7 +43,10 @@ def get_proposals(conn, status=None):
     try:
         cursor = conn.cursor()
         if status:
-            cursor.execute("SELECT * FROM proposals WHERE status = ? ORDER BY created_at DESC", (status,))
+            cursor.execute(
+                "SELECT * FROM proposals WHERE status = ? "
+                "ORDER BY created_at DESC", (status,)
+            )
         else:
             cursor.execute("SELECT * FROM proposals ORDER BY created_at DESC")
         
@@ -57,7 +69,8 @@ def update_proposal_status(conn, proposal_id, status, user="User"):
                 UPDATE proposals SET status = ? WHERE id = ?
             """, (status, proposal_id))
             
-        log_event(conn, "proposal_status_updated", user, {"proposal_id": proposal_id, "new_status": status})
+        details = {"proposal_id": proposal_id, "new_status": status}
+        log_event(conn, "proposal_status_updated", user, details)
         conn.commit()
         return True
     except sqlite3.Error as e:
