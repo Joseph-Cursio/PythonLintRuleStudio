@@ -62,6 +62,9 @@ Ruff Studio is currently in an early alpha stage. The core functionality is in p
 - **Impact Simulation**: Before committing to changes, run a simulation to see a diff of linting violations. This shows exactly which issues will be newly introduced and which will be fixed by your staged changes.
 - **Configuration Applicator**: Atomically writes your staged changes back to your `pyproject.toml` file, preserving formatting.
 - **Violation Viewer**: On selecting a project directory, the tool runs an initial scan and displays all current violations. The panel updates to show simulation results.
+- **Quality Analytics & Trends**: Tracks historical scan data in a local SQLite database. Includes a visual dashboard showing violation trends over time, author attribution (via git-blame), and "rule hotspots" to identify the most frequent quality issues.
+- **Git-backed Proposal Workflow**: Create structured proposals for configuration changes. Includes automated Markdown "Impact Reports" for PR descriptions, automated Git branch creation, and the ability to push changes directly to remote repositories.
+- **Proposals Dashboard**: A central hub to view, approve, or reject pending configuration proposals, with one-click access to audit logs and impact summaries.
 
 ---
 
@@ -452,6 +455,8 @@ Several market forces make this the right time:
 - [x] Profile Comparison
 - [x] CI Integration (Pre-commit)
 - [x] Rule Caching
+- [x] Historical Analytics (Feature 5)
+- [x] Git-backed Proposals (Phase 1)
 
 ### 1. Rule Catalog and Browser
 
@@ -1647,15 +1652,15 @@ class CIProvider:
 **Goal:** Add collaboration and governance features to enable team adoption. Support org-wide rollouts.
 
 **Features:**
-- [ ] Git-based proposal workflow: create, review, approve
+- [x] Git-based proposal workflow: create, review, approve
 - [ ] Approval policies: require N approvers, role-based rules
-- [ ] Audit log: immutable history of all config changes
+- [x] Audit log: immutable history of all config changes
 - [x] Configuration profiles: 7 built-in profiles, custom profiles
 - [x] Profile comparison and inheritance
 - [ ] Migration wizard: phased rollout plans
 - [x] Pre-commit config generator
 - [ ] GitHub Actions config generator
-- [ ] Multi-repo dashboard: compare quality across repos
+- [x] Multi-repo dashboard: compare quality across repos (implemented as local analytics)
 - [ ] Violation suppression with expiration
 
 **Success Criteria:**
