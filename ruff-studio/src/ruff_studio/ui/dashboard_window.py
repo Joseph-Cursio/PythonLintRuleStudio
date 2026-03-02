@@ -47,7 +47,11 @@ class ProposalsDashboard(ctk.CTkToplevel):
             self.action_btns, text="Reject", fg_color="red", command=self.reject
         )
         
-        self.load_proposals()
+        self.copy_report_btn = ctk.CTkButton(
+            self.action_btns, text="Copy PR Report", 
+            fg_color="gray", command=self.copy_report
+        )
+        self.copy_report_btn.pack(side="right", padx=5)
 
     def load_proposals(self):
         for widget in self.list_frame.winfo_children():
@@ -67,10 +71,12 @@ class ProposalsDashboard(ctk.CTkToplevel):
     def show_detail(self, proposal):
         self.current_proposal = proposal
         self.detail_title.configure(text=proposal['title'])
+        branch_text = f" | Branch: {proposal['branch_name']}" \
+            if proposal.get('branch_name') else ""
         info_text = (
             f"Author: {proposal['author']} | "
             f"Status: {proposal['status']} | "
-            f"Created: {proposal['created_at']}"
+            f"Created: {proposal['created_at']}{branch_text}"
         )
         self.detail_info.configure(text=info_text)
         
@@ -92,6 +98,20 @@ class ProposalsDashboard(ctk.CTkToplevel):
         else:
             self.approve_btn.pack_forget()
             self.reject_btn.pack_forget()
+
+    def copy_report(self):
+        if not self.current_proposal:
+            return
+        
+        # Regenerate the impact report for the clipboard
+        report = proposal_manager.generate_impact_report(
+            self.current_proposal['config_before'],
+            self.current_proposal['config_after'],
+            json.loads(self.current_proposal['impact_simulation'])
+        )
+        self.clipboard_clear()
+        self.clipboard_append(report)
+        messagebox.showinfo("Copied", "PR Impact Report copied to clipboard.")
 
     def approve(self):
         conn = self.master.analyzer.conn

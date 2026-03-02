@@ -83,6 +83,22 @@ def switch_branch(repo_path, branch_name):
         )
         return False
 
+def push_branch(repo_path, branch_name, remote="origin"):
+    """Pushes the given branch to the remote repository."""
+    try:
+        subprocess.run(
+            ["git", "push", "-u", remote, branch_name],
+            cwd=repo_path,
+            check=True,
+            capture_output=True
+        )
+        return True
+    except subprocess.CalledProcessError as e:
+        logging.error(
+            f"Error pushing branch {branch_name}: {e.stderr.decode()}"
+        )
+        return False
+
 
 def get_line_blame(repo_path, file_path, line_number):
     """
