@@ -10,6 +10,7 @@ from .controller import StudioController
 from .ui.proposal_window import ProposalWindow
 from .ui.dashboard_window import ProposalsDashboard
 from .ui.comparison_window import ProfileComparisonWindow
+from .ui.analytics_window import AnalyticsWindow
 from .ui.toolbar import Toolbar
 from .ui.rules_panel import RulesPanel
 from .ui.info_panel import InfoPanel
@@ -346,6 +347,9 @@ class App(ctk.CTk):
 
     def open_proposals_dashboard(self):
         ProposalsDashboard(self)
+
+    def open_analytics_window(self):
+        AnalyticsWindow(self, self.controller)
 
     def generate_pre_commit_config_file(self):
         try:

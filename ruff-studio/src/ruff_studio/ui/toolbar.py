@@ -52,6 +52,12 @@ class Toolbar(ctk.CTkFrame):
         )
         self.view_proposals_button.pack(side="left", padx=5)
 
+        self.view_analytics_button = ctk.CTkButton(
+            self.action_frame, text="View Analytics", 
+            command=master.open_analytics_window
+        )
+        self.view_analytics_button.pack(side="left", padx=5)
+
         self.generate_pre_commit_button = ctk.CTkButton(
             self.action_frame, text="Generate Pre-commit Config", 
             command=master.generate_pre_commit_config_file,

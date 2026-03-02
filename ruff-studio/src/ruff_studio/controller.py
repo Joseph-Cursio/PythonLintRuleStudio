@@ -73,11 +73,27 @@ class StudioController:
     def run_full_scan_worker(self, command, directory):
         """Background worker for workspace scanning."""
         try:
-            results = self.analyzer.run_full_scan(directory)
+            ruff_cfg, pylint_cfg = self.get_effective_configs()
+            results = self.analyzer.run_full_scan(
+                directory,
+                config={"ruff": ruff_cfg, "pylint": pylint_cfg}
+            )
             self.queue.put((command, results))
         except Exception as e:
             logging.error(f"Error in scan worker: {e}")
             self.queue.put(("error", str(e)))
+
+    def get_scan_history(self):
+        return self.analyzer.get_scan_history()
+
+    def get_author_stats(self):
+        return self.analyzer.get_author_stats()
+
+    def get_rule_hotspots(self):
+        return self.analyzer.get_rule_hotspots()
+
+    def get_violation_trend(self):
+        return self.analyzer.get_total_violations_trend()
 
 
     def get_effective_configs(self):

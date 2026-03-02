@@ -20,8 +20,19 @@ def create_tables(conn):
     try:
         cursor = conn.cursor()
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS scan_runs (
+                id TEXT PRIMARY KEY,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                directory TEXT NOT NULL,
+                branch TEXT,
+                total_violations INTEGER,
+                config_snapshot TEXT
+            );
+        """)
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS violations (
                 id TEXT PRIMARY KEY,
+                run_id TEXT,
                 rule_id TEXT NOT NULL,
                 file_path TEXT NOT NULL,
                 line_number INTEGER,
@@ -29,7 +40,8 @@ def create_tables(conn):
                 message TEXT,
                 timestamp DATETIME,
                 author TEXT,
-                commit_hash TEXT
+                commit_hash TEXT,
+                FOREIGN KEY (run_id) REFERENCES scan_runs(id)
             );
         """)
         cursor.execute("""
