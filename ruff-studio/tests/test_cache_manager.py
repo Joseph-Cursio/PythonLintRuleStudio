@@ -1,5 +1,5 @@
 import pytest
-from src.ruff_studio import cache_manager
+from ruff_studio import cache_manager
 from unittest.mock import patch, mock_open, MagicMock
 
 @pytest.fixture(autouse=True)
@@ -8,7 +8,7 @@ def mock_cache_file():
     mock_path = MagicMock(spec=cache_manager.Path)
     mock_path.is_file.return_value = True
 
-    with patch('src.ruff_studio.cache_manager.CACHE_FILE', mock_path):
+    with patch('ruff_studio.cache_manager.CACHE_FILE', mock_path):
         with patch('builtins.open', mock_open(read_data='{"test_key": {"version": "1.0", "data": "test_data"}}')) as mock_file:
             yield mock_file
 

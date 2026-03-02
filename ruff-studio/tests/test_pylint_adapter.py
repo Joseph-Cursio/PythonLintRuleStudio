@@ -1,5 +1,5 @@
 import pytest
-from src.ruff_studio import pylint_adapter
+from ruff_studio import pylint_adapter
 from unittest.mock import patch, MagicMock
 
 @patch('subprocess.run')

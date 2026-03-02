@@ -1,5 +1,5 @@
 import pytest
-from src.ruff_studio.main import App
+from ruff_studio.main import App
 from unittest.mock import patch, MagicMock
 import tomlkit
 
