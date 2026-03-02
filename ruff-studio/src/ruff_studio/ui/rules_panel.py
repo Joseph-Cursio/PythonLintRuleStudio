@@ -46,22 +46,6 @@ class RulesPanel(ctk.CTkFrame):
         for widget in self.scroll_frame.winfo_children():
             widget.destroy()
         
-        self.controller.navigable_items = []
-        # First pass: Build the display order list
-        for category_name, category_data in categories:
-            category_item = {
-                'type': 'category', 'name': category_name, 'data': category_data
-            }
-            self.controller.navigable_items.append(category_item)
-            sorted_rules = sorted(
-                category_data['rules'], key=lambda r: r['code']
-            )
-            for rule in sorted_rules:
-                rule_item = {
-                    'type': 'rule', 'data': rule, 'category_name': category_name
-                }
-                self.controller.navigable_items.append(rule_item)
-
         self.rule_widgets = {}
         for category_name, category_data in categories:
             # --- Category Header ---
@@ -116,7 +100,9 @@ class RulesPanel(ctk.CTkFrame):
                 'rules_container': rules_container,
                 'toggle_button': toggle_btn,
                 'category_frame': cat_frame,
-                'rules': {}
+                'rules': {},
+                'raw_data': category_data, # Keep for rebuilding navigation
+                'is_expanded': True # Default state
             }
 
             for rule in sorted(category_data['rules'], key=lambda r: r['code']):
@@ -163,16 +149,59 @@ class RulesPanel(ctk.CTkFrame):
                     'radio_variable': r_radio_var,
                     'frame': r_frame
                 }
+        self.rebuild_navigable_items()
+
+    def rebuild_navigable_items(self):
+        """Builds the list of items reachable via keyboard navigation."""
+        self.controller.navigable_items = []
+        # Categories are processed in the order they were added to rule_widgets
+        for cat_name, cat_widgets in self.rule_widgets.items():
+            category_item = {
+                'type': 'category', 'name': cat_name, 'data': cat_widgets['raw_data']
+            }
+            self.controller.navigable_items.append(category_item)
+            
+            # Only add rules if the category is expanded
+            if cat_widgets['is_expanded']:
+                sorted_rules = sorted(
+                    cat_widgets['raw_data']['rules'], key=lambda r: r['code']
+                )
+                for rule in sorted_rules:
+                    rule_item = {
+                        'type': 'rule', 'data': rule, 'category_name': cat_name
+                    }
+                    self.controller.navigable_items.append(rule_item)
+        
+        # Re-sync navigable_index to point to the current selected item if it's still there
+        if self.controller.selected_item:
+            for i, item in enumerate(self.controller.navigable_items):
+                if item == self.controller.selected_item:
+                    self.controller.navigable_index = i
+                    break
+            else:
+                # If selected item is now hidden, fallback to its category if it's a rule
+                if self.controller.selected_item['type'] == 'rule':
+                    cat_name = self.controller.selected_item['category_name']
+                    for i, item in enumerate(self.controller.navigable_items):
+                        if item['type'] == 'category' and item['name'] == cat_name:
+                            self.controller.navigable_index = i
+                            self.controller.selected_item = item
+                            break
 
     def toggle_category_rules(self, category_name):
-        container = self.rule_widgets[category_name]['rules_container']
-        toggle_button = self.rule_widgets[category_name]['toggle_button']
-        if container.winfo_viewable():
+        cat_widgets = self.rule_widgets[category_name]
+        container = cat_widgets['rules_container']
+        toggle_button = cat_widgets['toggle_button']
+        
+        if cat_widgets['is_expanded']:
             container.pack_forget()
             toggle_button.configure(text="▶")
+            cat_widgets['is_expanded'] = False
         else:
             container.pack(fill="x", padx=(25, 5))
             toggle_button.configure(text="▼")
+            cat_widgets['is_expanded'] = True
+        self.rebuild_navigable_items()
 
     def update_panel(self):
         if not self.controller.current_directory:

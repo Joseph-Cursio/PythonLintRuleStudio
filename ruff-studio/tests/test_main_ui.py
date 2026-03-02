@@ -633,3 +633,134 @@ def test_dashboard_copy_report(app):
         report_text = dash.clipboard_append.call_args[0][0]
         assert "Linting Configuration Proposal" in report_text
         dash.destroy()
+
+def test_e2e_standard_workflow(app, tmp_path):
+    """
+    End-to-End test representing the primary user journey:
+    Open -> Stage -> Simulate -> Proposal.
+    """
+    from ruff_studio.ui.proposal_window import ProposalWindow
+    
+    # 1. Setup workspace
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text("[tool.ruff.lint]\nselect = ['E']\n")
+    app.controller.current_directory = str(tmp_path)
+    app.controller.pyproject_path = str(pyproject)
+    app.controller.pyproject_data = tomlkit.parse(pyproject.read_text())
+    
+    # 2. Find a rule (F401) and stage it to 'select'
+    # We'll use the radio variable directly to simulate the click
+    rule_widget = app.rules_panel.rule_widgets["Pyflakes"]['rules']['F401']
+    rule_widget['radio_variable'].set("select")
+    app.stage_rule_change("F401", "select")
+    
+    assert "F401" in app.controller.staged_changes
+    assert app.controller.staged_changes["F401"] == "select"
+    
+    # 3. Simulate changes
+    # Mock the scan results
+    mock_sim_results = [{"code": "F401", "filename": "test.py", 
+                         "location": {"row": 1, "column": 1}, "message": "msg"}]
+    
+    with patch('ruff_studio.ruff_adapter.run_scan_with_config', 
+               return_value=mock_sim_results):
+        app.toolbar.simulate_button.invoke()
+        # Manually put the result in the queue since run_in_thread is mocked
+        app.controller.queue.put(("run_simulation", mock_sim_results))
+        app.process_queue()
+        app.update_idletasks()
+        
+        # Verify Results panel updated
+        label_text = app.results_panel.results_label.cget("text")
+        assert "Simulation Results" in label_text
+        
+    # 4. Apply changes (Open Proposal Window)
+    with patch('ruff_studio.ruff_adapter.run_scan_with_config', 
+               return_value=mock_sim_results):
+        app.toolbar.apply_button.invoke()
+        # No queue item needed for apply_changes as it opens the window directly
+        app.update_idletasks()
+        
+        # Find the ProposalWindow (it's a child of app)
+        prop_win = None
+        for child in app.winfo_children():
+            if isinstance(child, ProposalWindow):
+                prop_win = child
+                break
+        
+        assert prop_win is not None
+        assert "F401" in prop_win.config_after
+        prop_win.destroy()
+
+def test_ui_persistence_across_navigation(app):
+    """
+    Ensures that staged changes are preserved in the UI even when
+    navigating between different items.
+    """
+    # 1. Stage a change in Category A (Pyflakes)
+    app.stage_rule_change("F401", "ignore")
+    
+    # 2. Navigate to Category B (Error)
+    app.select_category("Error")
+    app.update_idletasks()
+    
+    # 3. Navigate back to Category A
+    app.select_category("Pyflakes")
+    app.update_idletasks()
+    
+    # 4. Verify radio button state is still 'ignore'
+    rule_widget = app.rules_panel.rule_widgets["Pyflakes"]['rules']['F401']
+    assert rule_widget['radio_variable'].get() == "ignore"
+
+def test_malformed_pyproject_handling(app, tmp_path):
+    """
+    Tests that the UI handles malformed pyproject.toml without crashing.
+    """
+    # 1. Create a malformed TOML file
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text("[tool.ruff.lint\nselect = ['E']\n") # Missing closing bracket
+    
+    # 2. Select the directory
+    # We expect it to show an error message (mocked in our app fixture)
+    with patch('ruff_studio.main.filedialog.askdirectory', return_value=str(tmp_path)):
+        app.select_directory()
+        app.update_idletasks()
+        
+    # 3. Verify that the app is still functional and didn't crash
+    # It should have reverted or cleared the pyproject_data
+    assert app.controller.pyproject_data is None or \
+           isinstance(app.controller.pyproject_data, MagicMock)
+    assert app.toolbar.status_label.cget("text") != "Scanning..."
+
+def test_keyboard_navigation_with_collapsed_categories(app):
+    """
+    Verifies that keyboard navigation works correctly even when 
+    some categories are collapsed (changing the navigable items).
+    """
+    # 1. Expand first category (Pyflakes) and select first rule
+    app.select_category("Pyflakes")
+    app.update_idletasks()
+    
+    initial_index = app.controller.navigable_index
+    
+    # 2. Simulate 'Down' key to move to first rule
+    mock_event = MagicMock()
+    mock_event.keysym = "Down"
+    app.navigate_items(mock_event)
+    
+    assert app.controller.navigable_index == initial_index + 1
+    assert app.controller.selected_item['type'] == 'rule'
+    
+    # 3. Collapse the category
+    app.toggle_category_rules("Pyflakes")
+    app.update_idletasks()
+
+    # 4. Navigate 'Down' again. Since Pyflakes is collapsed, 
+    # it should skip all Pyflakes rules and go to the next category.
+    # Note: navigable_items are rebuilt on toggle.
+    app.navigate_items(mock_event)
+    
+    # The new selected item should be the next category
+    # (Pylint: Convention in our MOCK_RULES after re-syncing to Pyflakes)
+    assert app.controller.selected_item['type'] == 'category'
+    assert app.controller.selected_item['name'] == 'Pylint: Convention'
