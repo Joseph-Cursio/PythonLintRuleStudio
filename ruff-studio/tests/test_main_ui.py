@@ -55,6 +55,9 @@ def app():
     # Also patch messagebox globally for all UI tests to prevent blocking.
     with patch.object(App, 'run_in_thread', return_value=None), \
          patch.object(StudioController, 'run_in_thread', return_value=None), \
+         patch('ruff_studio.main.messagebox'), \
+         patch('ruff_studio.ui.proposal_window.messagebox'), \
+         patch('ruff_studio.ui.dashboard_window.messagebox'), \
          patch('tkinter.messagebox.showinfo'), \
          patch('tkinter.messagebox.showerror'), \
          patch('tkinter.messagebox.showwarning'), \
@@ -62,23 +65,23 @@ def app():
             app_instance = App()
 
             # Manually set the rules data via controller
-    app_instance.controller.all_rules = MOCK_RULES
-    app_instance.controller.current_directory = "/fake/dir"
-    app_instance.controller.pyproject_path = "/fake/dir/pyproject.toml"
-    app_instance.controller.pyproject_data = tomlkit.parse("dummy = true")
-    app_instance.controller.analyzer.conn = MagicMock()
+            app_instance.controller.all_rules = MOCK_RULES
+            app_instance.controller.current_directory = "/fake/dir"
+            app_instance.controller.pyproject_path = "/fake/dir/pyproject.toml"
+            app_instance.controller.pyproject_data = tomlkit.parse("dummy = true")
+            app_instance.controller.analyzer.conn = MagicMock()
 
-    # Manually call the UI population method to create the widgets
-    # This also populates controller.navigable_items
-    app_instance.populate_rules_initial()
+            # Manually call the UI population method to create the widgets
+            # This also populates controller.navigable_items
+            app_instance.populate_rules_initial()
 
-    # Process any pending events to ensure the UI is fully drawn and ready
-    app_instance.update_idletasks()
+            # Process any pending events to ensure the UI is fully drawn and ready
+            app_instance.update_idletasks()
 
-    yield app_instance
+            yield app_instance
 
-    # Teardown the app window after the test completes
-    app_instance.destroy()
+            # Teardown the app window after the test completes
+            app_instance.destroy()
 
 def test_toggle_category_rules(app):
     """
@@ -314,7 +317,7 @@ def test_proposals_dashboard_reject(mock_get, mock_update, app):
 
 def test_select_directory_no_config(app, tmp_path):
     """Tests select_directory when no pyproject.toml exists."""
-    with patch('customtkinter.filedialog.askdirectory', return_value=str(tmp_path)):
+    with patch('ruff_studio.main.filedialog.askdirectory', return_value=str(tmp_path)):
         with patch('os.path.exists', return_value=False):
             with patch.object(app.controller, 'run_in_thread'):
                 app.select_directory()
@@ -466,7 +469,7 @@ def test_generate_pre_commit(app, tmp_path):
             return_value="yaml"
         ):
             filename_mock = patch(
-                'customtkinter.filedialog.asksaveasfilename',
+                'ruff_studio.main.filedialog.asksaveasfilename',
                 return_value=str(tmp_path / "pre.yaml")
             )
             with filename_mock:
