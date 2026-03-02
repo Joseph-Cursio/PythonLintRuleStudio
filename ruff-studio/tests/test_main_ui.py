@@ -1,5 +1,6 @@
 import pytest
 import os
+import customtkinter as ctk
 from ruff_studio.main import App
 from ruff_studio.controller import StudioController
 from unittest.mock import patch, MagicMock, mock_open
@@ -540,3 +541,95 @@ def test_show_rule_info_with_scrape(app):
     with patch.object(app.controller, 'run_in_thread') as mock_run:
         buttons[0].invoke()
         mock_run.assert_called_once()
+
+def test_analytics_window_loading(app):
+    """Tests that AnalyticsWindow populates correctly."""
+    from ruff_studio.ui.analytics_window import AnalyticsWindow
+    
+    mock_history = [
+        ("id1", "2026-03-02 10:00:00", "main", 10),
+        ("id2", "2026-03-02 09:00:00", "main", 15)
+    ]
+    mock_authors = {"Alice": 5, "Bob": 5}
+    mock_hotspots = {"E501": 8, "F401": 2}
+    
+    with patch.object(app.controller, 'get_scan_history', return_value=mock_history):
+        with patch.object(app.controller, 'get_author_stats', return_value=mock_authors):
+            with patch.object(app.controller, 'get_rule_hotspots', return_value=mock_hotspots):
+                win = AnalyticsWindow(app, app.controller)
+                app.update_idletasks()
+                
+                # Check for key labels
+                found_latest = False
+                found_author = False
+                for widget in win.scroll_frame.winfo_children():
+                    for sub in widget.winfo_children():
+                        if isinstance(sub, ctk.CTkLabel):
+                            text = sub.cget("text")
+                            if "Latest Scan: 10" in text: found_latest = True
+                            if "Alice: 5" in text: found_author = True
+                
+                assert found_latest
+                assert found_author
+                win.destroy()
+
+@patch('ruff_studio.git_adapter.push_branch')
+@patch('ruff_studio.git_adapter.commit_changes')
+@patch('ruff_studio.git_adapter.create_branch')
+@patch('ruff_studio.git_adapter.is_repo_clean', return_value=True)
+@patch('ruff_studio.proposal_manager.create_proposal')
+def test_proposal_window_with_push(
+    mock_create, mock_clean, mock_branch, mock_commit, mock_push, app
+):
+    """Tests the new 'Push branch' workflow in ProposalWindow."""
+    from ruff_studio.ui.proposal_window import ProposalWindow
+    
+    app.controller.current_directory = "/fake"
+    app.controller.base_scan_results = []
+    
+    with patch('ruff_studio.config_manager.read_pyproject_text', return_value=""):
+        with patch('ruff_studio.config_manager.write_pyproject'):
+            win = ProposalWindow(app, "b", "a", [])
+            win.title_entry.insert(0, "Title")
+            win.push_var.set(True) # Enable push
+            
+            # Mock clipboard methods
+            win.clipboard_clear = MagicMock()
+            win.clipboard_append = MagicMock()
+            
+            win.create_and_commit()
+            
+            mock_branch.assert_called_once()
+            mock_commit.assert_called_once()
+            mock_push.assert_called_once()
+            assert mock_create.call_count == 1
+            # Verify clipboard was used for impact report
+            win.clipboard_append.assert_called_once()
+            
+            win.destroy()
+
+def test_dashboard_copy_report(app):
+    """Tests that ProposalsDashboard correctly copies reports to clipboard."""
+    from ruff_studio.ui.dashboard_window import ProposalsDashboard
+    import json
+    
+    mock_p = {
+        "id": "1", "title": "T", "status": "pending", "author": "A", 
+        "created_at": "N", "rationale": "R", "impact_simulation": "[]",
+        "config_before": "", "config_after": "", "branch_name": "br"
+    }
+    
+    with patch('ruff_studio.proposal_manager.get_proposals', return_value=[mock_p]):
+        dash = ProposalsDashboard(app)
+        dash.show_detail(mock_p)
+        
+        dash.clipboard_clear = MagicMock()
+        dash.clipboard_append = MagicMock()
+        
+        dash.copy_report()
+        
+        dash.clipboard_append.assert_called_once()
+        # Verify the report contains the rationale
+        report_text = dash.clipboard_append.call_args[0][0]
+        assert "Linting Configuration Proposal" in report_text
+        dash.destroy()

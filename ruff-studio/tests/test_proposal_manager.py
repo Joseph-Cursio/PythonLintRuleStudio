@@ -99,3 +99,26 @@ def test_update_status_error(db_conn):
     db_conn.close()
     result = proposal_manager.update_proposal_status(db_conn, "id", "approved")
     assert result is False
+
+def test_generate_impact_report():
+    """Tests the Markdown report generation logic."""
+    before = "[rules]\nselect = ['E']"
+    after = "[rules]\nselect = ['E', 'F']"
+    simulation = [
+        {"rule_id": "F401", "file": "a.py"},
+        {"rule_id": "F401", "file": "b.py"},
+        {"rule_id": "E501", "file": "c.py"}
+    ]
+    base = [{"id": "1"}] # 1 existing violation
+    
+    report = proposal_manager.generate_impact_report(
+        before, after, simulation, base_violations=base
+    )
+    
+    assert "# Linting Configuration Proposal" in report
+    assert "**Current Violations:** 1" in report
+    assert "**Projected Violations:** 3" in report
+    assert "**Net Change:** +2 violations" in report
+    assert "**F401:** 2 violations" in report
+    assert "**E501:** 1 violations" in report
+    assert "```toml" in report
