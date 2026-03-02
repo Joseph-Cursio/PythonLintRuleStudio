@@ -59,6 +59,7 @@ def app():
     app_instance.current_directory = "/fake/dir"
     app_instance.pyproject_path = "/fake/dir/pyproject.toml"
     app_instance.pyproject_data = tomlkit.parse("dummy = true")
+    app_instance.analyzer.conn = MagicMock()
 
     # Manually call the UI population method to create the widgets
     app_instance.populate_rules_initial()
@@ -252,7 +253,7 @@ def test_stage_category_change(app):
 @patch('ruff_studio.proposal_manager.create_proposal')
 def test_proposal_window_logic(mock_create, app):
     """Tests the logic inside ProposalWindow."""
-    from ruff_studio.main import ProposalWindow
+    from ruff_studio.ui.proposal_window import ProposalWindow
     
     win = ProposalWindow(app, "before", "after", {"impact": "low"})
     win.title_entry.insert(0, "Test Proposal")
@@ -269,7 +270,7 @@ def test_proposal_window_logic(mock_create, app):
 @patch('ruff_studio.proposal_manager.get_proposals')
 def test_proposals_dashboard(mock_get, mock_update, app):
     """Tests that the ProposalsDashboard can load and approve proposals."""
-    from ruff_studio.main import ProposalsDashboard
+    from ruff_studio.ui.dashboard_window import ProposalsDashboard
     
     mock_p = {
         "id": "123", "title": "P1", "status": "pending", 
@@ -290,7 +291,7 @@ def test_proposals_dashboard(mock_get, mock_update, app):
 @patch('ruff_studio.proposal_manager.get_proposals')
 def test_proposals_dashboard_reject(mock_get, mock_update, app):
     """Tests rejecting a proposal from the dashboard."""
-    from ruff_studio.main import ProposalsDashboard
+    from ruff_studio.ui.dashboard_window import ProposalsDashboard
     mock_p = {"id": "1", "title": "T", "status": "pending", "author": "A", 
               "created_at": "N", "rationale": "R", "impact_simulation": "{}",
               "config_before": "", "config_after": ""}
@@ -324,7 +325,7 @@ def test_ui_initialization(app):
 
 def test_profile_comparison_logic(app):
     """Tests that ProfileComparisonWindow correctly finds differences."""
-    from ruff_studio.main import ProfileComparisonWindow
+    from ruff_studio.ui.comparison_window import ProfileComparisonWindow
     
     mock_p1 = {"profile": {"rules": {"ruff": {"select": ["E"], "ignore": ["F"]}}}}
     mock_p2 = {"profile": {"rules": {"ruff": {"select": ["F"], "ignore": ["E"]}}}}
@@ -354,7 +355,7 @@ def test_profile_comparison_logic(app):
 @patch('ruff_studio.proposal_manager.create_proposal')
 def test_proposal_window_commit(mock_create, mock_clean, mock_branch, mock_commit, app):
     """Tests the create_and_commit path in ProposalWindow."""
-    from ruff_studio.main import ProposalWindow
+    from ruff_studio.ui.proposal_window import ProposalWindow
     
     with patch('tkinter.messagebox.showinfo'):
         with patch('ruff_studio.config_manager.read_pyproject_text', return_value=""):
@@ -371,7 +372,7 @@ def test_proposal_window_commit(mock_create, mock_clean, mock_branch, mock_commi
 @patch('ruff_studio.proposal_manager.get_proposals')
 def test_proposals_dashboard_reject(mock_get, mock_update, app):
     """Tests rejecting a proposal from the dashboard."""
-    from ruff_studio.main import ProposalsDashboard
+    from ruff_studio.ui.dashboard_window import ProposalsDashboard
     mock_p = {"id": "1", "title": "T", "status": "pending", "author": "A", 
               "created_at": "N", "rationale": "R", "impact_simulation": "{}",
               "config_before": "", "config_after": ""}
@@ -417,7 +418,7 @@ def test_apply_changes_with_proposal(app, tmp_path):
     # Set attributes directly instead of calling select_directory
     app.current_directory = str(tmp_path)
     app.pyproject_path = str(tmp_path / "pyproject.toml")
-    app.pyproject_data = tomlkit.parse("dummy = true")
+    app.pyproject_data = tomlkit.parse("test = true")
     
     with patch('ruff_studio.ruff_adapter.run_scan_with_config', return_value=[]):
         with patch('ruff_studio.config_manager.read_pyproject_text', return_value=""):
@@ -439,9 +440,9 @@ def test_apply_changes_direct(app, tmp_path):
 
 def test_open_windows(app):
     """Tests that opening other windows doesn't crash."""
-    with patch('ruff_studio.main.ProfileComparisonWindow'):
+    with patch('ruff_studio.ui.comparison_window.ProfileComparisonWindow'):
         app.open_comparison_window()
-    with patch('ruff_studio.main.ProposalsDashboard'):
+    with patch('ruff_studio.ui.dashboard_window.ProposalsDashboard'):
         app.open_proposals_dashboard()
 
 def test_generate_pre_commit(app, tmp_path):
