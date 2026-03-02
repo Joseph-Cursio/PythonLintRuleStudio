@@ -1,0 +1,165 @@
+import customtkinter as ctk
+from .tooltip import Tooltip
+
+class RulesPanel(ctk.CTkFrame):
+    def __init__(self, master, controller, **kwargs):
+        super().__init__(master, **kwargs)
+        self.master = master
+        self.controller = controller
+        
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        # --- Header ---
+        self.header_frame = ctk.CTkFrame(self, height=30, fg_color="transparent")
+        self.header_frame.grid(row=0, column=0, sticky="ew", padx=5)
+        self.header_frame.grid_columnconfigure(3, weight=1)
+
+        ctk.CTkLabel(self.header_frame, text="", width=20).grid(row=0, column=0, padx=5)
+        ctk.CTkLabel(self.header_frame, text="Enabled", anchor="w").grid(row=0, column=1, padx=(0, 5))
+
+        radio_header_frame = ctk.CTkFrame(self.header_frame, fg_color="transparent")
+        radio_header_frame.grid(row=0, column=2)
+        for i in range(3): radio_header_frame.grid_columnconfigure(i, minsize=35)
+
+        for i, (text, tip) in enumerate([("Sel", "Select"), ("Ign", "Ignore"), ("Def", "Default")]):
+            lbl = ctk.CTkLabel(radio_header_frame, text=text, anchor="center", width=35)
+            lbl.grid(row=0, column=i)
+            Tooltip(lbl, tip)
+
+        # --- Content ---
+        self.scroll_frame = ctk.CTkScrollableFrame(self)
+        self.scroll_frame.grid(row=1, column=0, sticky="nsew")
+        self.loading_label = ctk.CTkLabel(self.scroll_frame, text="Rules (Loading...)")
+        self.loading_label.pack(pady=10)
+        
+        self.rule_widgets = {}
+
+    def populate(self, categories):
+        for widget in self.scroll_frame.winfo_children():
+            widget.destroy()
+        
+        self.controller.navigable_items = []
+        # First pass: Build the display order list
+        for category_name, category_data in categories:
+            category_item = {
+                'type': 'category', 'name': category_name, 'data': category_data
+            }
+            self.controller.navigable_items.append(category_item)
+            sorted_rules = sorted(
+                category_data['rules'], key=lambda r: r['code']
+            )
+            for rule in sorted_rules:
+                rule_item = {
+                    'type': 'rule', 'data': rule, 'category_name': category_name
+                }
+                self.controller.navigable_items.append(rule_item)
+
+        self.rule_widgets = {}
+        for category_name, category_data in categories:
+            # --- Category Header ---
+            cat_frame = ctk.CTkFrame(self.scroll_frame)
+            cat_frame.pack(fill="x", pady=(5, 1), padx=5)
+            cat_frame.grid_columnconfigure(3, weight=1)
+
+            cat_frame.bind("<Button-1>", lambda e, cn=category_name: self.master.select_category(cn))
+
+            eff_var = ctk.StringVar()
+            toggle_btn = ctk.CTkButton(
+                cat_frame, text="▼", width=20,
+                command=lambda cn=category_name: self.master.toggle_category_rules(cn)
+            )
+            toggle_btn.grid(row=0, column=0, padx=5, pady=2)
+
+            eff_ind = ctk.CTkCheckBox(cat_frame, text="", variable=eff_var, onvalue="on", offvalue="off", state="disabled")
+            eff_ind.grid(row=0, column=1, padx=(0, 5))
+
+            radio_frame = ctk.CTkFrame(cat_frame, fg_color="transparent")
+            radio_frame.grid(row=0, column=2)
+            radio_var = ctk.StringVar(value="default")
+            
+            for i, val in enumerate(["select", "ignore", "default"]):
+                ctk.CTkRadioButton(
+                    radio_frame, text="", variable=radio_var, value=val, width=35, 
+                    radiobutton_width=18, radiobutton_height=18,
+                    command=lambda v=val, p=category_data['prefix']: self.master.stage_category_change(p, v)
+                ).grid(row=0, column=i)
+
+            ctk.CTkLabel(cat_frame, text=f"{category_name} ({category_data['prefix']})", anchor="w").grid(row=0, column=3, sticky="w", padx=10)
+
+            # --- Rules Container ---
+            rules_container = ctk.CTkFrame(self.scroll_frame, fg_color="transparent")
+            rules_container.pack(fill="x", padx=(25, 5))
+
+            self.rule_widgets[category_name] = {
+                'prefix': category_data['prefix'],
+                'radio_variable': radio_var,
+                'effective_state_variable': eff_var,
+                'rules_container': rules_container,
+                'toggle_button': toggle_btn,
+                'category_frame': cat_frame,
+                'rules': {}
+            }
+
+            for rule in sorted(category_data['rules'], key=lambda r: r['code']):
+                r_frame = ctk.CTkFrame(rules_container)
+                r_frame.pack(fill="x", pady=1)
+                r_frame.grid_columnconfigure(3, weight=1)
+                ctk.CTkLabel(r_frame, text="", width=20).grid(row=0, column=0, padx=5)
+
+                r_eff_var = ctk.StringVar()
+                ctk.CTkCheckBox(r_frame, text="", variable=r_eff_var, onvalue="on", offvalue="off", state="disabled").grid(row=0, column=1, padx=(0, 5))
+
+                r_radio_frame = ctk.CTkFrame(r_frame, fg_color="transparent")
+                r_radio_frame.grid(row=0, column=2)
+                r_radio_var = ctk.StringVar(value="default")
+                for i, val in enumerate(["select", "ignore", "default"]):
+                    ctk.CTkRadioButton(
+                        r_radio_frame, text="", variable=r_radio_var, value=val, width=35,
+                        radiobutton_width=18, radiobutton_height=18,
+                        command=lambda v=val, rc=rule['code']: self.master.stage_rule_change(rc, v)
+                    ).grid(row=0, column=i)
+
+                r_text = f"{rule['code']}" + (f" (⚠️ {rule['status']})" if rule['status'] != 'stable' else "")
+                lbl = ctk.CTkLabel(r_frame, text=f"{r_text}: {rule['name']}", anchor="w")
+                lbl.grid(row=0, column=3, sticky="w", padx=10)
+                if rule['status'] != 'stable': Tooltip(lbl, f"This rule is {rule['status']}.")
+                lbl.bind("<Button-1>", lambda e, r=rule, cn=category_name: self.master.show_rule_info(r, cn))
+
+                self.rule_widgets[category_name]['rules'][rule['code']] = {
+                    'effective_state_variable': r_eff_var,
+                    'radio_variable': r_radio_var,
+                    'frame': r_frame
+                }
+
+    def toggle_category_rules(self, category_name):
+        container = self.rule_widgets[category_name]['rules_container']
+        toggle_button = self.rule_widgets[category_name]['toggle_button']
+        if container.winfo_viewable():
+            container.pack_forget()
+            toggle_button.configure(text="▶")
+        else:
+            container.pack(fill="x", padx=(25, 5))
+            toggle_button.configure(text="▼")
+
+    def update_panel(self):
+        if not self.controller.current_directory: return
+        ruff_cfg, pylint_cfg = self.controller.get_effective_configs()
+
+        for cat_name, cat_widgets in self.rule_widgets.items():
+            prefix = cat_widgets['prefix']
+            cat_widgets['radio_variable'].set(self.controller.staged_changes.get(
+                prefix, self.controller.get_explicit_rule_state(prefix, ruff_cfg, pylint_cfg)
+            ))
+
+            any_on, all_on = False, True
+            for rc, r_widget in cat_widgets['rules'].items():
+                r_widget['radio_variable'].set(self.controller.staged_changes.get(
+                    rc, self.controller.get_explicit_rule_state(rc, ruff_cfg, pylint_cfg)
+                ))
+                is_on = self.controller.get_effective_rule_state(rc, prefix)
+                r_widget['effective_state_variable'].set("on" if is_on else "off")
+                if is_on: any_on = True
+                else: all_on = False
+
+            cat_widgets['effective_state_variable'].set("on" if all_on or any_on else "off")

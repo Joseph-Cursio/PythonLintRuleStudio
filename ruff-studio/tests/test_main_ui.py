@@ -64,6 +64,7 @@ def app():
     app_instance.controller.analyzer.conn = MagicMock()
 
     # Manually call the UI population method to create the widgets
+    # This also populates controller.navigable_items
     app_instance.populate_rules_initial()
 
     # Process any pending events to ensure the UI is fully drawn and ready
@@ -81,8 +82,8 @@ def test_toggle_category_rules(app):
     category_name = "Pyflakes"
 
     # Get the relevant widgets from the app instance
-    toggle_button = app.rule_widgets[category_name]['toggle_button']
-    rules_container = app.rule_widgets[category_name]['rules_container']
+    toggle_button = app.rules_panel.rule_widgets[category_name]['toggle_button']
+    rules_container = app.rules_panel.rule_widgets[category_name]['rules_container']
 
     # --- 1. Initial State ---
     # The container for the rules should be visible by default after initialization.
@@ -188,11 +189,11 @@ disable = ["C0103"]
     app.update_idletasks()
 
     # Check that the C0103 rule is correctly identified as "ignore"
-    pylint_rule_widget = app.rule_widgets["Pylint: Convention"]['rules']['C0103']
+    pylint_rule_widget = app.rules_panel.rule_widgets["Pylint: Convention"]['rules']['C0103']
     assert pylint_rule_widget['radio_variable'].get() == "ignore"
 
     # Check that a ruff rule is "default"
-    ruff_rule_widget = app.rule_widgets["Pyflakes"]['rules']['F401']
+    ruff_rule_widget = app.rules_panel.rule_widgets["Pyflakes"]['rules']['F401']
     assert ruff_rule_widget['radio_variable'].get() == "default"
 
     # --- 3. Stage a change: Enable the pylint rule ---
@@ -396,7 +397,7 @@ def test_process_queue_discover(app):
     app.process_queue()
     
     assert app.controller.all_rules == mock_data
-    assert "CAT" in app.rule_widgets
+    assert "CAT" in app.rules_panel.rule_widgets
 
 def test_apply_changes_with_proposal(app, tmp_path):
     """Tests that apply_changes triggers ProposalWindow."""
@@ -462,7 +463,7 @@ def test_show_rule_info_with_scrape(app):
     rule["documentation"] = None # Force scrape
     
     # Initialize widget structure for this rule to avoid UI errors
-    app.rule_widgets["Error"] = {
+    app.rules_panel.rule_widgets["Error"] = {
         'prefix': 'E',
         'rules': {
             'E501': {
