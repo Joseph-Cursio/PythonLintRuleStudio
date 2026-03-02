@@ -39,6 +39,7 @@ class WorkspaceAnalyzer:
             db_path (str): The path to the SQLite database.
         """
         self.db_path = db_path
+        self.conn = None
 
     def _clear_violations(self, conn):
         """Clears all violations from the database."""
@@ -85,6 +86,7 @@ class WorkspaceAnalyzer:
             list[UnifiedViolationModel]: A list of violation objects.
         """
         conn = database_manager.setup_database(self.db_path)
+        self.conn = conn
         if conn is None:
             return []
 

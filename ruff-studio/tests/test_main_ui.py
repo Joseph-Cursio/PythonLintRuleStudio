@@ -1,6 +1,7 @@
 import pytest
+import os
 from ruff_studio.main import App
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, mock_open
 import tomlkit
 
 # MOCK_RULES is now intentionally non-alphabetical to test display order.
@@ -55,6 +56,9 @@ def app():
 
     # Manually set the rules data, bypassing the threaded discovery
     app_instance.all_rules = MOCK_RULES
+    app_instance.current_directory = "/fake/dir"
+    app_instance.pyproject_path = "/fake/dir/pyproject.toml"
+    app_instance.pyproject_data = tomlkit.parse("dummy = true")
 
     # Manually call the UI population method to create the widgets
     app_instance.populate_rules_initial()
@@ -212,3 +216,270 @@ disable = ["C0103"]
     # The `disable` list should now be empty or not present
     pylint_config = updated_data.get("tool", {}).get("pylint", {})
     assert "C0103" not in pylint_config.get("disable", [])
+
+def test_apply_profile(app):
+    """Tests that applying a profile correctly stages changes."""
+    mock_profile = {
+        "profile": {
+            "name": "test-profile",
+            "rules": {
+                "ruff": {"select": ["E"], "ignore": ["F"]},
+                "pylint": {"disable": ["C0103"]}
+            }
+        }
+    }
+    
+    with patch('ruff_studio.profile_manager.load_profile', return_value=mock_profile):
+        app.apply_profile("test-profile")
+    
+    # Check that changes are staged
+    # Ruff: E select, F ignore (F401, F841 are under Pyflakes/F)
+    assert app.staged_changes.get("F401") == "ignore"
+    assert app.staged_changes.get("F841") == "ignore"
+    # Pylint: C0103 ignore
+    assert app.staged_changes.get("C0103") == "ignore"
+
+def test_stage_category_change(app):
+    """Tests that staging a change for a whole category works."""
+    # Pyflakes has prefix 'F'
+    app.stage_category_change("F", "select")
+    assert app.staged_changes["F"] == "select"
+    # Individual rules should be cleared from staged if category is changed
+    app.staged_changes["F401"] = "ignore"
+    app.stage_category_change("F", "default")
+    assert "F401" not in app.staged_changes
+
+@patch('ruff_studio.proposal_manager.create_proposal')
+def test_proposal_window_logic(mock_create, app):
+    """Tests the logic inside ProposalWindow."""
+    from ruff_studio.main import ProposalWindow
+    
+    win = ProposalWindow(app, "before", "after", {"impact": "low"})
+    win.title_entry.insert(0, "Test Proposal")
+    win.rationale_text.insert("1.0", "Some rationale")
+    
+    win.create_only()
+    
+    mock_create.assert_called_once_with(
+        app.analyzer.conn, "Test Proposal", "Some rationale",
+        "before", "after", {"impact": "low"}
+    )
+
+@patch('ruff_studio.proposal_manager.update_proposal_status', return_value=True)
+@patch('ruff_studio.proposal_manager.get_proposals')
+def test_proposals_dashboard(mock_get, mock_update, app):
+    """Tests that the ProposalsDashboard can load and approve proposals."""
+    from ruff_studio.main import ProposalsDashboard
+    
+    mock_p = {
+        "id": "123", "title": "P1", "status": "pending", 
+        "author": "A", "created_at": "now", "rationale": "R",
+        "impact_simulation": "[]", "config_before": "", "config_after": ""
+    }
+    mock_get.return_value = [mock_p]
+    
+    dash = ProposalsDashboard(app)
+    # Selection logic is triggered by clicking button in list
+    dash.show_detail(mock_p)
+    assert dash.detail_title.cget("text") == "P1"
+    
+    dash.approve()
+    mock_update.assert_called_once_with(app.analyzer.conn, "123", "approved")
+
+@patch('ruff_studio.proposal_manager.update_proposal_status', return_value=True)
+@patch('ruff_studio.proposal_manager.get_proposals')
+def test_proposals_dashboard_reject(mock_get, mock_update, app):
+    """Tests rejecting a proposal from the dashboard."""
+    from ruff_studio.main import ProposalsDashboard
+    mock_p = {"id": "1", "title": "T", "status": "pending", "author": "A", 
+              "created_at": "N", "rationale": "R", "impact_simulation": "{}",
+              "config_before": "", "config_after": ""}
+    mock_get.return_value = [mock_p]
+    
+    with patch('tkinter.messagebox.showinfo'):
+        dash = ProposalsDashboard(app)
+        dash.current_proposal = mock_p
+        dash.reject()
+        mock_update.assert_called_once_with(app.analyzer.conn, "1", "rejected")
+
+def test_select_directory_no_config(app, tmp_path):
+    """Tests select_directory when no pyproject.toml exists."""
+    with patch('customtkinter.filedialog.askdirectory', return_value=str(tmp_path)):
+        with patch('os.path.exists', return_value=False):
+            with patch.object(app, 'run_in_thread'):
+                app.select_directory()
+                assert app.current_directory == str(tmp_path)
+                assert app.pyproject_path == os.path.join(str(tmp_path), "pyproject.toml")
+
+def test_ui_initialization(app):
+    """Tests that all expected UI components are created."""
+    assert app.top_frame is not None
+    assert app.action_frame is not None
+    assert app.rules_frame is not None
+    assert app.info_frame is not None
+    assert app.results_frame is not None
+    # Check some buttons
+    assert app.apply_button.cget("text") == "Apply Changes"
+    assert app.simulate_button.cget("text") == "Simulate Changes"
+
+def test_profile_comparison_logic(app):
+    """Tests that ProfileComparisonWindow correctly finds differences."""
+    from ruff_studio.main import ProfileComparisonWindow
+    
+    mock_p1 = {"profile": {"rules": {"ruff": {"select": ["E"], "ignore": ["F"]}}}}
+    mock_p2 = {"profile": {"rules": {"ruff": {"select": ["F"], "ignore": ["E"]}}}}
+    
+    with patch('ruff_studio.profile_manager.get_built_in_profiles', return_value=["p1", "p2"]):
+        with patch('ruff_studio.profile_manager.load_profile', side_effect=[mock_p1, mock_p2]):
+            win = ProfileComparisonWindow(app)
+            win.profile1_var.set("p1")
+            win.profile2_var.set("p2")
+            
+            # Patch the compare_profiles to avoid real file logic if needed, 
+            # or rely on the fact that we mocked get_built_in_profiles
+            diff = {
+                "select_only_in_1": ["E"], "select_only_in_2": ["F"],
+                "ignore_only_in_1": ["F"], "ignore_only_in_2": ["E"],
+                "common_select": [], "common_ignore": []
+            }
+            with patch('ruff_studio.profile_manager.compare_profiles', return_value=diff):
+                win.do_comparison()
+                report = win.results_textbox.get("1.0", "end")
+                assert "Only in 'p1':" in report
+                assert "- E" in report
+
+@patch('ruff_studio.git_adapter.commit_changes')
+@patch('ruff_studio.git_adapter.create_branch', return_value=True)
+@patch('ruff_studio.git_adapter.is_repo_clean', return_value=True)
+@patch('ruff_studio.proposal_manager.create_proposal')
+def test_proposal_window_commit(mock_create, mock_clean, mock_branch, mock_commit, app):
+    """Tests the create_and_commit path in ProposalWindow."""
+    from ruff_studio.main import ProposalWindow
+    
+    with patch('tkinter.messagebox.showinfo'):
+        with patch('ruff_studio.config_manager.read_pyproject_text', return_value=""):
+            with patch('ruff_studio.config_manager.write_pyproject'):
+                win = ProposalWindow(app, "b", "a", {})
+                win.title_entry.insert(0, "Title")
+                win.create_and_commit()
+        
+        mock_branch.assert_called_once()
+        mock_commit.assert_called_once()
+        assert mock_create.call_count == 1
+
+@patch('ruff_studio.proposal_manager.update_proposal_status', return_value=True)
+@patch('ruff_studio.proposal_manager.get_proposals')
+def test_proposals_dashboard_reject(mock_get, mock_update, app):
+    """Tests rejecting a proposal from the dashboard."""
+    from ruff_studio.main import ProposalsDashboard
+    mock_p = {"id": "1", "title": "T", "status": "pending", "author": "A", 
+              "created_at": "N", "rationale": "R", "impact_simulation": "{}",
+              "config_before": "", "config_after": ""}
+    mock_get.return_value = [mock_p]
+    
+    with patch('tkinter.messagebox.showinfo'):
+        dash = ProposalsDashboard(app)
+        dash.current_proposal = mock_p
+        dash.reject()
+        mock_update.assert_called_once_with(app.analyzer.conn, "1", "rejected")
+
+def test_discover_rules_worker(app):
+    """Tests that the discover_rules_worker puts results in the queue."""
+    with patch('ruff_studio.ruff_adapter.discover_rules', return_value={"R": {}}):
+        with patch('ruff_studio.pylint_adapter.discover_rules', return_value={"P": {}}):
+            app._discover_rules_worker("test_cmd")
+            command, data = app.queue.get()
+            assert command == "test_cmd"
+            assert "R" in data
+            assert "Pylint: P" in data
+
+def test_run_full_scan_worker(app):
+    """Tests that the run_full_scan_worker puts results in the queue."""
+    with patch.object(app.analyzer, 'run_full_scan', return_value=["v1"]):
+        app._run_full_scan_worker("scan_cmd", "/dir")
+        command, data = app.queue.get()
+        assert command == "scan_cmd"
+        assert data == ["v1"]
+
+def test_process_queue_discover(app):
+    """Tests that process_queue correctly handles discover_rules command."""
+    mock_data = {"CAT": {"prefix": "C", "rules": [{"code": "C01", "name": "N", "summary": "S", "fix": False, "status": "stable"}]}}
+    app.queue.put(("discover_rules", mock_data))
+    
+    # process_queue calls populate_rules_initial
+    app.process_queue()
+    
+    assert app.all_rules == mock_data
+    assert "CAT" in app.rule_widgets
+
+def test_apply_changes_with_proposal(app, tmp_path):
+    """Tests that apply_changes triggers ProposalWindow."""
+    # Set attributes directly instead of calling select_directory
+    app.current_directory = str(tmp_path)
+    app.pyproject_path = str(tmp_path / "pyproject.toml")
+    app.pyproject_data = tomlkit.parse("dummy = true")
+    
+    with patch('ruff_studio.ruff_adapter.run_scan_with_config', return_value=[]):
+        with patch('ruff_studio.config_manager.read_pyproject_text', return_value=""):
+            with patch('ruff_studio.main.ProposalWindow') as mock_win:
+                app.apply_changes(show_proposal_window=True)
+                mock_win.assert_called_once()
+
+def test_apply_changes_direct(app, tmp_path):
+    """Tests applying changes directly without proposal."""
+    app.current_directory = str(tmp_path)
+    app.pyproject_path = str(tmp_path / "pyproject.toml")
+    app.pyproject_data = tomlkit.parse("dummy = true")
+    
+    with patch('ruff_studio.config_manager.write_pyproject') as mock_write:
+        with patch('ruff_studio.config_manager.read_pyproject_text', return_value=""):
+            app.apply_changes(show_proposal_window=False)
+            mock_write.assert_called_once()
+
+
+def test_open_windows(app):
+    """Tests that opening other windows doesn't crash."""
+    with patch('ruff_studio.main.ProfileComparisonWindow'):
+        app.open_comparison_window()
+    with patch('ruff_studio.main.ProposalsDashboard'):
+        app.open_proposals_dashboard()
+
+def test_generate_pre_commit(app, tmp_path):
+    """Tests pre-commit configuration generation."""
+    app.current_directory = str(tmp_path)
+    with patch('ruff_studio.ruff_adapter.get_ruff_version', return_value="0.1.0"):
+        with patch('ruff_studio.ci_integration.generate_pre_commit_config', return_value="yaml"):
+            with patch('customtkinter.filedialog.asksaveasfilename', return_value=str(tmp_path/"pre.yaml")):
+                with patch('builtins.open', mock_open()) as m:
+                    app.generate_pre_commit_config_file()
+                    m.assert_called_once_with(str(tmp_path/"pre.yaml"), "w")
+
+def test_update_results_panel(app):
+    """Tests that update_results_panel correctly displays violations."""
+    from ruff_studio.workspace_analyzer import UnifiedViolationModel
+    import customtkinter as ctk
+    
+    mock_violation = UnifiedViolationModel(
+        rule_id="E501", file_path="f.py", line_number=1, column=1, 
+        message="Too long", author="Dev"
+    )
+    
+    app.update_results_panel([mock_violation])
+    labels = [w for w in app.results_frame.winfo_children() if isinstance(w, ctk.CTkLabel)]
+    violation_labels = [l for l in labels if "E501" in l.cget("text")]
+    assert len(violation_labels) == 1
+    assert "Author: Dev" in violation_labels[0].cget("text")
+
+def test_show_rule_info_with_scrape(app):
+    """Tests that show_rule_info triggers doc scraping."""
+    rule = MOCK_RULES["Error"]["rules"][0].copy()
+    rule["documentation"] = None # Force scrape
+    
+    with patch('ruff_studio.ruff_adapter.scrape_rule_documentation', return_value="Scraped Docs"):
+        app.show_rule_info(rule, "Error")
+        
+    # Check if a textbox with docs was created
+    import customtkinter as ctk
+    textboxes = [w for w in app.info_frame.winfo_children() if isinstance(w, ctk.CTkTextbox)]
+    assert len(textboxes) == 1
+    assert textboxes[0].get("1.0", "end").strip() == "Scraped Docs"

@@ -1040,16 +1040,8 @@ class App(ctk.CTk):
             if code in ruff_config.get("ignore", []):
                 return "ignore"
             return "default"
-
     def update_rules_panel(self):
         if not self.current_directory:
-            # Disable all widgets if no directory is selected
-            for category_widgets in self.rule_widgets.values():
-                for rb in category_widgets['radio_variable'].values():
-                    rb.configure(state="disabled")
-                for rule_widget in category_widgets['rules'].values():
-                    for rb in rule_widget['radio_variable'].values():
-                        rb.configure(state="disabled")
             return
 
         ruff_config = config_manager.get_ruff_config(self.pyproject_data)
