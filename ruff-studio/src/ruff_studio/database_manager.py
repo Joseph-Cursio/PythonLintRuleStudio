@@ -27,7 +27,9 @@ def create_tables(conn):
                 line_number INTEGER,
                 column INTEGER,
                 message TEXT,
-                timestamp DATETIME
+                timestamp DATETIME,
+                author TEXT,
+                commit_hash TEXT
             );
         """)
         cursor.execute("""

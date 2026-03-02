@@ -78,5 +78,51 @@ def switch_branch(repo_path, branch_name):
         )
         return True
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error switching to branch {branch_name}: {e.stderr.decode()}")
+        logging.error(
+            f"Error switching to branch {branch_name}: {e.stderr.decode()}"
+        )
         return False
+
+
+def get_line_blame(repo_path, file_path, line_number):
+    """
+    Returns git blame information for a specific line.
+    Returns a dict with 'author', 'commit', and 'timestamp' or None.
+    """
+    try:
+        # -L <start>,<end> restricts blame to a range
+        # --porcelain gives machine-readable output
+        result = subprocess.run(
+            [
+                "git", "blame", "-L", f"{line_number},{line_number}", 
+                "--porcelain", file_path
+            ],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        output = result.stdout.splitlines()
+        if not output:
+            return None
+
+        # Porcelain format first line is: <sha> <orig_line> <final_line> <count>
+        header = output[0].split()
+        commit_hash = header[0]
+
+        info = {"commit": commit_hash}
+        for line in output:
+            if line.startswith("author "):
+                info["author"] = line[7:]
+            elif line.startswith("author-time "):
+                # Convert unix timestamp to readable string
+                ts = int(line[12:])
+                from datetime import datetime
+                info["timestamp"] = datetime.fromtimestamp(ts).isoformat()
+
+        return info
+    except Exception as e:
+        logging.debug(f"Could not get git blame for {file_path}:{line_number}: {e}")
+        return None
+

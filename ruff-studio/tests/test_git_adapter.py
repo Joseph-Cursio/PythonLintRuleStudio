@@ -77,3 +77,21 @@ def test_switch_branch_error(mock_run):
     """Tests error handling for switching branch."""
     mock_run.side_effect = subprocess.CalledProcessError(1, "git", stderr=b"error")
     assert git_adapter.switch_branch("/path/to/repo", "fail") is False
+
+
+@patch("subprocess.run")
+def test_get_line_blame_success(mock_run):
+    """Tests that git blame output is correctly parsed."""
+    mock_stdout = (
+        "abc123sha 1 1 1\n"
+        "author John Doe\n"
+        "author-time 1700000000\n"
+        "filename file.py\n"
+    )
+    mock_run.return_value = MagicMock(stdout=mock_stdout, returncode=0)
+    
+    info = git_adapter.get_line_blame("/path", "file.py", 10)
+    
+    assert info["commit"] == "abc123sha"
+    assert info["author"] == "John Doe"
+    assert "2023-11-" in info["timestamp"] # Roughly checking date conversion

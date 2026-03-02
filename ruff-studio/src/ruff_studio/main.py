@@ -673,14 +673,17 @@ class App(ctk.CTk):
             return
 
         for result in results:
+            author_info = f" (Author: {result.author})" if result.author else ""
             result_text = (
                 f"{result.file_path}:{result.line_number}:"
-                f"{result.column} {result.rule_id} {result.message}"
+                f"{result.column} {result.rule_id}{author_info}\n"
+                f"  {result.message}"
             )
             ctk.CTkLabel(
                 self.results_frame, text=result_text,
-                wraplength=self.results_frame.winfo_width()-50, justify="left"
-            ).pack(pady=2, anchor="w")
+                wraplength=self.results_frame.winfo_width()-50, justify="left",
+                anchor="w"
+            ).pack(pady=2, fill="x", padx=5)
 
     def _make_hashable(self, data):
         if hasattr(data, '__dict__'):
