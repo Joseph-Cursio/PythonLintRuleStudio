@@ -30,8 +30,33 @@ def create_tables(conn):
                 timestamp DATETIME
             );
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS proposals (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                type TEXT,
+                rationale TEXT,
+                author TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                status TEXT DEFAULT 'pending',
+                impact_simulation TEXT,
+                config_before TEXT,
+                config_after TEXT,
+                implemented_at DATETIME,
+                branch_name TEXT
+            );
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id TEXT PRIMARY KEY,
+                event_type TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                user TEXT,
+                details TEXT
+            );
+        """)
         conn.commit()
-        logging.info("Table 'violations' created or already exists.")
+        logging.info("All required tables created or already exist.")
     except sqlite3.Error as e:
         logging.error(f"Error creating tables: {e}")
 

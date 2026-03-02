@@ -14,6 +14,15 @@ def write_pyproject(path: str, data):
     with open(path, "w") as f:
         tomlkit.dump(data, f)
 
+def read_pyproject_text(path: str):
+    """Reads and returns the raw text of a pyproject.toml file."""
+    with open(path, "r") as f:
+        return f.read()
+
+def get_pyproject_text(data):
+    """Returns the pyproject data as a string."""
+    return tomlkit.dumps(data)
+
 def get_ruff_config(pyproject_data):
     """
     Extracts the ruff lint configuration from the pyproject data.

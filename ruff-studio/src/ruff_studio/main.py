@@ -5,8 +5,13 @@ import tomlkit
 import threading
 import queue
 import copy
+import uuid
+import json
 from unittest.mock import MagicMock
-from . import ruff_adapter, config_manager, workspace_analyzer, profile_manager, ci_integration, pylint_adapter
+from . import (
+    ruff_adapter, config_manager, workspace_analyzer, profile_manager, 
+    ci_integration, pylint_adapter, git_adapter, proposal_manager
+)
 
 class Tooltip:
     def __init__(self, widget, text):
@@ -33,6 +38,222 @@ class Tooltip:
         if self.tooltip_window:
             self.tooltip_window.destroy()
         self.tooltip_window = None
+
+class ProposalWindow(ctk.CTkToplevel):
+    def __init__(self, master, config_before, config_after, impact_simulation):
+        super().__init__(master)
+        self.master = master
+        self.title("Create Proposal")
+        self.geometry("600x500")
+        self.config_before = config_before
+        self.config_after = config_after
+        self.impact_simulation = impact_simulation
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(3, weight=1)
+
+        ctk.CTkLabel(
+            self, text="Proposal Title:", anchor="w"
+        ).grid(row=0, column=0, padx=20, pady=(20, 5), sticky="ew")
+        self.title_entry = ctk.CTkEntry(
+            self, placeholder_text="e.g., Enable Security Rules"
+        )
+        self.title_entry.grid(row=1, column=0, padx=20, pady=5, sticky="ew")
+
+        ctk.CTkLabel(
+            self, text="Rationale (Why are we making this change?):", anchor="w"
+        ).grid(row=2, column=0, padx=20, pady=(10, 5), sticky="ew")
+        self.rationale_text = ctk.CTkTextbox(self)
+        self.rationale_text.grid(row=3, column=0, padx=20, pady=5, sticky="nsew")
+
+        self.button_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.button_frame.grid(row=4, column=0, padx=20, pady=20, sticky="ew")
+
+        self.create_btn = ctk.CTkButton(
+            self.button_frame, text="Create Proposal Only", command=self.create_only
+        )
+        self.create_btn.pack(side="left", padx=5)
+
+        self.commit_btn = ctk.CTkButton(
+            self.button_frame, text="Apply & Create Git Branch", 
+            command=self.create_and_commit
+        )
+        self.commit_btn.pack(side="left", padx=5)
+
+        self.cancel_btn = ctk.CTkButton(
+            self.button_frame, text="Cancel", fg_color="gray", command=self.destroy
+        )
+        self.cancel_btn.pack(side="right", padx=5)
+
+    def _get_data(self):
+        title = self.title_entry.get().strip()
+        rationale = self.rationale_text.get("1.0", "end").strip()
+        if not title:
+            messagebox.showwarning(
+                "Warning", "Please provide a title for the proposal."
+            )
+            return None, None
+        return title, rationale
+
+    def create_only(self):
+        title, rationale = self._get_data()
+        if not title:
+            return
+        
+        proposal_id = proposal_manager.create_proposal(
+            self.master.analyzer.conn, title, rationale,
+            self.config_before, self.config_after, self.impact_simulation
+        )
+        if proposal_id:
+            messagebox.showinfo(
+                "Success", f"Proposal '{title}' created successfully."
+            )
+            self.destroy()
+
+    def create_and_commit(self):
+        title, rationale = self._get_data()
+        if not title:
+            return
+
+        repo_path = self.master.current_directory
+        if not git_adapter.is_repo_clean(repo_path):
+            if not messagebox.askyesno(
+                "Git Dirty", 
+                "Repository has uncommitted changes. Continue anyway?"
+            ):
+                return
+
+        branch_name = f"ruff-studio/proposal-{uuid.uuid4().hex[:8]}"
+        if git_adapter.create_branch(repo_path, branch_name):
+            # Apply changes to file
+            self.master.apply_changes(show_proposal_window=False)
+            
+            # Commit
+            commit_msg = f"feat: {title}\n\n{rationale}"
+            git_adapter.commit_changes(repo_path, commit_msg)
+            
+            # Save proposal to DB
+            proposal_manager.create_proposal(
+                self.master.analyzer.conn, title, rationale,
+                self.config_before, self.config_after, self.impact_simulation
+            )
+            
+            messagebox.showinfo(
+                "Success", 
+                f"Changes applied and committed to branch: {branch_name}"
+            )
+            self.destroy()
+        else:
+            messagebox.showerror("Error", "Failed to create git branch.")
+
+class ProposalsDashboard(ctk.CTkToplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.master = master
+        self.title("Proposals Dashboard")
+        self.geometry("1000x600")
+
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        # --- Left Panel: List ---
+        self.list_frame = ctk.CTkScrollableFrame(self, width=300)
+        self.list_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        
+        # --- Right Panel: Detail ---
+        self.detail_frame = ctk.CTkFrame(self)
+        self.detail_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        self.detail_frame.grid_columnconfigure(0, weight=1)
+        self.detail_frame.grid_rowconfigure(2, weight=1)
+
+        self.detail_title = ctk.CTkLabel(
+            self.detail_frame, text="Select a proposal to view details", 
+            font=("", 16, "bold")
+        )
+        self.detail_title.grid(row=0, column=0, padx=20, pady=10, sticky="w")
+        
+        self.detail_info = ctk.CTkLabel(
+            self.detail_frame, text="", justify="left"
+        )
+        self.detail_info.grid(row=1, column=0, padx=20, pady=5, sticky="w")
+
+        self.detail_text = ctk.CTkTextbox(self.detail_frame)
+        self.detail_text.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
+
+        self.action_btns = ctk.CTkFrame(self.detail_frame, fg_color="transparent")
+        self.action_btns.grid(row=3, column=0, padx=20, pady=10, sticky="ew")
+
+        self.approve_btn = ctk.CTkButton(
+            self.action_btns, text="Approve", command=self.approve
+        )
+        self.reject_btn = ctk.CTkButton(
+            self.action_btns, text="Reject", fg_color="red", command=self.reject
+        )
+        
+        self.load_proposals()
+
+    def load_proposals(self):
+        for widget in self.list_frame.winfo_children():
+            widget.destroy()
+        
+        proposals = proposal_manager.get_proposals(self.master.analyzer.conn)
+        for p in proposals:
+            btn = ctk.CTkButton(
+                self.list_frame, 
+                text=f"{p['title']}\n({p['status']})",
+                command=lambda p=p: self.show_detail(p),
+                anchor="w",
+                fg_color="transparent" if p['status'] != 'pending' else None
+            )
+            btn.pack(fill="x", pady=2)
+
+    def show_detail(self, proposal):
+        self.current_proposal = proposal
+        self.detail_title.configure(text=proposal['title'])
+        info_text = (
+            f"Author: {proposal['author']} | "
+            f"Status: {proposal['status']} | "
+            f"Created: {proposal['created_at']}"
+        )
+        self.detail_info.configure(text=info_text)
+        
+        impact = json.loads(proposal['impact_simulation'])
+        violation_count = len(impact) if isinstance(impact, list) else 'N/A'
+        report = f"RATIONALE:\n{proposal['rationale']}\n\n"
+        report += f"IMPACT SIMULATION:\n- Violations found: {violation_count}\n\n"
+        report += (
+            f"CONFIG CHANGES:\n--- BEFORE ---\n{proposal['config_before']}\n\n"
+            f"--- AFTER ---\n{proposal['config_after']}"
+        )
+        
+        self.detail_text.delete("1.0", "end")
+        self.detail_text.insert("1.0", report)
+        
+        if proposal['status'] == 'pending':
+            self.approve_btn.pack(side="left", padx=5)
+            self.reject_btn.pack(side="left", padx=5)
+        else:
+            self.approve_btn.pack_forget()
+            self.reject_btn.pack_forget()
+
+    def approve(self):
+        conn = self.master.analyzer.conn
+        p_id = self.current_proposal['id']
+        if proposal_manager.update_proposal_status(conn, p_id, "approved"):
+            messagebox.showinfo("Approved", "Proposal marked as approved.")
+            self.load_proposals()
+            # Refresh detail view with updated data
+            updated_p = proposal_manager.get_proposals(conn, status="approved")[0]
+            self.show_detail(updated_p)
+
+    def reject(self):
+        conn = self.master.analyzer.conn
+        p_id = self.current_proposal['id']
+        if proposal_manager.update_proposal_status(conn, p_id, "rejected"):
+            messagebox.showinfo("Rejected", "Proposal marked as rejected.")
+            self.load_proposals()
+            updated_p = proposal_manager.get_proposals(conn, status="rejected")[0]
+            self.show_detail(updated_p)
 
 class ProfileComparisonWindow(ctk.CTkToplevel):
     def __init__(self, master):
@@ -187,6 +408,11 @@ class App(ctk.CTk):
             self.action_frame, text="Compare Profiles", command=self.open_comparison_window
         )
         self.compare_profiles_button.pack(side="left", padx=5)
+
+        self.view_proposals_button = ctk.CTkButton(
+            self.action_frame, text="View Proposals", command=self.open_proposals_dashboard
+        )
+        self.view_proposals_button.pack(side="left", padx=5)
 
         self.generate_pre_commit_button = ctk.CTkButton(
             self.action_frame, text="Generate Pre-commit Config", command=self.generate_pre_commit_config_file,
@@ -654,13 +880,17 @@ class App(ctk.CTk):
         """
         if rule_code in self.staged_changes:
             state = self.staged_changes[rule_code]
-            if state == "select": return True
-            if state == "ignore": return False
+            if state == "select":
+                return True
+            if state == "ignore":
+                return False
 
         if category_prefix in self.staged_changes:
             state = self.staged_changes[category_prefix]
-            if state == "select": return True
-            if state == "ignore": return False
+            if state == "select":
+                return True
+            if state == "ignore":
+                return False
 
         return self.is_rule_enabled(rule_code)
 
@@ -723,10 +953,12 @@ class App(ctk.CTk):
 
         for category_name, category_widgets in self.rule_widgets.items():
             prefix = category_widgets['prefix']
-            is_pylint = category_name.startswith("Pylint:")
 
             # Update category radio buttons
-            cat_state = self.staged_changes.get(prefix, self._get_explicit_rule_state(prefix, ruff_config, pylint_config))
+            cat_state = self.staged_changes.get(
+                prefix, 
+                self._get_explicit_rule_state(prefix, ruff_config, pylint_config)
+            )
             category_widgets['radio_variable'].set(cat_state)
 
             any_rule_on = False
@@ -734,7 +966,12 @@ class App(ctk.CTk):
 
             for rule_code, rule_widget in category_widgets['rules'].items():
                 # Update rule radio buttons
-                rule_state = self.staged_changes.get(rule_code, self._get_explicit_rule_state(rule_code, ruff_config, pylint_config))
+                rule_state = self.staged_changes.get(
+                    rule_code, 
+                    self._get_explicit_rule_state(
+                        rule_code, ruff_config, pylint_config
+                    )
+                )
                 rule_widget['radio_variable'].set(rule_state)
 
                 # Update effective state indicator
@@ -750,7 +987,8 @@ class App(ctk.CTk):
             if all_rules_on:
                 category_widgets['effective_state_variable'].set("on")
             elif any_rule_on:
-                category_widgets['effective_state_variable'].set("on") # Indeterminate state could be better
+                # Indeterminate state could be better
+                category_widgets['effective_state_variable'].set("on")
             else:
                 category_widgets['effective_state_variable'].set("off")
 
@@ -854,15 +1092,32 @@ class App(ctk.CTk):
             self.profile_menu.set("Apply a Profile...")
 
 
-    def apply_changes(self):
+    def apply_changes(self, show_proposal_window=True):
         if not self.pyproject_data or not self.pyproject_path:
             return
 
         ruff_config, pylint_config = self.get_effective_configs()
+        
+        # Capture configs for proposal
+        config_before = config_manager.read_pyproject_text(self.pyproject_path)
+        
+        # Create a copy of the data to get the 'after' text without writing yet
+        after_data = copy.deepcopy(self.pyproject_data)
+        config_manager.update_ruff_config(after_data, ruff_config)
+        config_manager.update_pylint_config(after_data, pylint_config)
+        config_after = config_manager.get_pyproject_text(after_data)
 
+        if show_proposal_window:
+            # Quick simulation for the proposal metadata
+            impact_simulation = ruff_adapter.run_scan_with_config(
+                self.current_directory, ruff_config
+            )
+            ProposalWindow(self, config_before, config_after, impact_simulation)
+            return
+
+        # Actual application
         config_manager.update_ruff_config(self.pyproject_data, ruff_config)
         config_manager.update_pylint_config(self.pyproject_data, pylint_config)
-
         config_manager.write_pyproject(self.pyproject_path, self.pyproject_data)
 
         self.staged_changes = {}
@@ -874,6 +1129,9 @@ class App(ctk.CTk):
 
     def open_comparison_window(self):
         ProfileComparisonWindow(self)
+
+    def open_proposals_dashboard(self):
+        ProposalsDashboard(self)
 
     def generate_pre_commit_config_file(self):
         """Generates and saves a .pre-commit-config.yaml file."""

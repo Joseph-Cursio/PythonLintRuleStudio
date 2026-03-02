@@ -1,7 +1,6 @@
 """
 Manages caching for data that is expensive to compute, like rule discovery.
 """
-import os
 import json
 from pathlib import Path
 
