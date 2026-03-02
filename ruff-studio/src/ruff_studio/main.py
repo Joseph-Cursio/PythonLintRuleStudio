@@ -1,10 +1,5 @@
-import os
 import queue
-import threading
 import copy
-import uuid
-import json
-import logging
 from unittest.mock import MagicMock
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
@@ -19,7 +14,6 @@ from .ui.toolbar import Toolbar
 from .ui.rules_panel import RulesPanel
 from .ui.info_panel import InfoPanel
 from .ui.results_panel import ResultsPanel
-from .ui.tooltip import Tooltip
 
 class App(ctk.CTk):
     def __init__(self, headless=False):
@@ -111,9 +105,6 @@ class App(ctk.CTk):
 
     def update_simulation_results_panel(self, results):
         self.results_panel.set_simulation_results(results)
-
-    def toggle_category_rules(self, category_name):
-        self.rules_panel.toggle_category_rules(category_name)
 
     def run_in_thread(self, worker, command_name, *args):
         self.toolbar.select_button.configure(state="disabled")
@@ -272,7 +263,8 @@ class App(ctk.CTk):
             self.controller.queue.put(("error", str(e)))
 
     def apply_profile(self, profile_name):
-        if profile_name == "Apply a Profile...": return
+        if profile_name == "Apply a Profile...":
+            return
         try:
             profile_data = profile_manager.load_profile(profile_name)
             rules_all = profile_data.get("profile", {}).get("rules", {})
@@ -280,12 +272,14 @@ class App(ctk.CTk):
             self.controller.staged_changes = {}
             if profile_ruff_config:
                 dummy_ruff_config = {
-                    "select": profile_ruff_config.get("select", []), 
+                    "select": profile_ruff_config.get("select", []),
                     "ignore": profile_ruff_config.get("ignore", [])
                 }
-                profile_ruff_rules = self.controller._get_ruff_rules_from_config(dummy_ruff_config)
+                profile_ruff_rules = \
+                    self.controller._get_ruff_rules_from_config(dummy_ruff_config)
                 for cat_name, cat_widgets in self.rules_panel.rule_widgets.items():
-                    if cat_name.startswith("Pylint:"): continue
+                    if cat_name.startswith("Pylint:"):
+                        continue
                     for rule_code in cat_widgets['rules'].keys():
                         if rule_code in profile_ruff_rules:
                             self.controller.staged_changes[rule_code] = "select"
@@ -295,7 +289,8 @@ class App(ctk.CTk):
             if profile_pylint_config:
                 disabled = profile_pylint_config.get("disable", [])
                 for cat_name, cat_widgets in self.rules_panel.rule_widgets.items():
-                    if not cat_name.startswith("Pylint:"): continue
+                    if not cat_name.startswith("Pylint:"):
+                        continue
                     for rule_code in cat_widgets['rules'].keys():
                         if rule_code in disabled:
                             self.controller.staged_changes[rule_code] = "ignore"
@@ -313,24 +308,38 @@ class App(ctk.CTk):
     def apply_changes(self, show_proposal_window=True):
         if not self.controller.pyproject_data or not self.controller.pyproject_path:
             return
-        ruff_config, pylint_config = self.controller.get_effective_configs()
-        config_before = config_manager.read_pyproject_text(self.controller.pyproject_path)
+        ruff_cfg, pylint_cfg = self.controller.get_effective_configs()
+        config_before = config_manager.read_pyproject_text(
+            self.controller.pyproject_path
+        )
         after_data = copy.deepcopy(self.controller.pyproject_data)
-        config_manager.update_ruff_config(after_data, ruff_config)
-        config_manager.update_pylint_config(after_data, pylint_config)
+        config_manager.update_ruff_config(after_data, ruff_cfg)
+        config_manager.update_pylint_config(after_data, pylint_cfg)
         config_after = config_manager.get_pyproject_text(after_data)
         if show_proposal_window:
-            impact = ruff_adapter.run_scan_with_config(self.controller.current_directory, ruff_config)
+            impact = ruff_adapter.run_scan_with_config(
+                self.controller.current_directory, ruff_cfg
+            )
             ProposalWindow(self, config_before, config_after, impact)
             return
-        config_manager.update_ruff_config(self.controller.pyproject_data, ruff_config)
-        config_manager.update_pylint_config(self.controller.pyproject_data, pylint_config)
-        config_manager.write_pyproject(self.controller.pyproject_path, self.controller.pyproject_data)
+        config_manager.update_ruff_config(
+            self.controller.pyproject_data, ruff_cfg
+        )
+        config_manager.update_pylint_config(
+            self.controller.pyproject_data, pylint_cfg
+        )
+        config_manager.write_pyproject(
+            self.controller.pyproject_path, self.controller.pyproject_data
+        )
         self.controller.staged_changes = {}
         self.toolbar.simulate_button.configure(state="disabled")
         self.toolbar.apply_button.configure(state="disabled")
         self.update_rules_panel()
-        self.controller.run_in_thread(self.controller.run_full_scan_worker, "run_full_scan", self.controller.current_directory)
+        self.controller.run_in_thread(
+            self.controller.run_full_scan_worker,
+            "run_full_scan",
+            self.controller.current_directory
+        )
 
     def open_comparison_window(self):
         ProfileComparisonWindow(self)
@@ -356,11 +365,17 @@ class App(ctk.CTk):
             messagebox.showerror("Error", f"Failed: {e}")
 
     def navigate_items(self, event):
-        if not self.controller.navigable_items: return
+        if not self.controller.navigable_items:
+            return
         if event.keysym == "Up":
-            self.controller.navigable_index = max(0, self.controller.navigable_index - 1)
+            self.controller.navigable_index = max(
+                0, self.controller.navigable_index - 1
+            )
         elif event.keysym == "Down":
-            self.controller.navigable_index = min(len(self.controller.navigable_items) - 1, self.controller.navigable_index + 1)
+            self.controller.navigable_index = min(
+                len(self.controller.navigable_items) - 1,
+                self.controller.navigable_index + 1
+            )
         item = self.controller.navigable_items[self.controller.navigable_index]
         if item['type'] == 'rule':
             self.show_rule_info(item['data'], item['category_name'])
@@ -373,11 +388,15 @@ class App(ctk.CTk):
                 self.controller.selected_item = item
                 self.controller.navigable_index = i
                 break
-        if self.selected_rule_frame: self.selected_rule_frame.configure(fg_color="transparent")
-        if self.selected_category_frame: self.selected_category_frame.configure(fg_color="transparent")
+        if self.selected_rule_frame:
+            self.selected_rule_frame.configure(fg_color="transparent")
+        if self.selected_category_frame:
+            self.selected_category_frame.configure(fg_color="transparent")
         if category_name in self.rules_panel.rule_widgets:
-            self.selected_category_frame = self.rules_panel.rule_widgets[category_name]['category_frame']
+            self.selected_category_frame = \
+                self.rules_panel.rule_widgets[category_name]['category_frame']
             self.selected_category_frame.configure(fg_color="lightblue")
+            self.rules_panel.see(self.selected_category_frame)
         self.info_panel.clear()
 
     def show_rule_info(self, rule, category_name=None):
@@ -386,13 +405,19 @@ class App(ctk.CTk):
                 self.controller.selected_item = item
                 self.controller.navigable_index = i
                 break
-        if self.selected_rule_frame: self.selected_rule_frame.configure(fg_color="transparent")
-        if self.selected_category_frame: self.selected_category_frame.configure(fg_color="transparent")
+        if self.selected_rule_frame:
+            self.selected_rule_frame.configure(fg_color="transparent")
+        if self.selected_category_frame:
+            self.selected_category_frame.configure(fg_color="transparent")
         rule_code = rule['code']
-        cat_name = category_name or self.controller.selected_item.get('category_name')
-        if cat_name in self.rules_panel.rule_widgets and rule_code in self.rules_panel.rule_widgets[cat_name]['rules']:
-            self.selected_rule_frame = self.rules_panel.rule_widgets[cat_name]['rules'][rule_code]['frame']
+        cat_name = category_name or \
+            self.controller.selected_item.get('category_name')
+        if cat_name in self.rules_panel.rule_widgets and \
+           rule_code in self.rules_panel.rule_widgets[cat_name]['rules']:
+            self.selected_rule_frame = \
+                self.rules_panel.rule_widgets[cat_name]['rules'][rule_code]['frame']
             self.selected_rule_frame.configure(fg_color="lightblue")
+            self.rules_panel.see(self.selected_rule_frame)
         self.info_panel.set_rule(rule)
 
     def fetch_rule_docs(self, rule):

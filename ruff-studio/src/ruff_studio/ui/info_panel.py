@@ -16,9 +16,12 @@ class InfoPanel(ctk.CTkScrollableFrame):
 
     def set_rule(self, rule):
         self.clear()
+        self._parent_canvas.yview_moveto(0)
         self.info_label.configure(text=f"Rule: {rule['code']}")
         
-        ctk.CTkLabel(self, text=f"Name: {rule['name']}", wraplength=250).pack(pady=5, anchor="w")
+        ctk.CTkLabel(
+            self, text=f"Name: {rule['name']}", wraplength=250
+        ).pack(pady=5, anchor="w")
         
         source = "Pylint" if self.controller.is_pylint_rule(rule['code']) else "Ruff"
         ctk.CTkLabel(
@@ -26,7 +29,10 @@ class InfoPanel(ctk.CTkScrollableFrame):
             font=("", 12, "italic")
         ).pack(pady=5, anchor="w")
         
-        ctk.CTkLabel(self, text=f"Summary: {rule['summary']}", wraplength=250, justify="left").pack(pady=5, anchor="w")
+        ctk.CTkLabel(
+            self, text=f"Summary: {rule['summary']}",
+            wraplength=250, justify="left"
+        ).pack(pady=5, anchor="w")
         
         self._init_doc_viewer(rule)
 

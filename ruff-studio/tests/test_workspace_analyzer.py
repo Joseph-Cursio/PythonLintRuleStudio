@@ -1,6 +1,6 @@
 import unittest
 import sqlite3
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from ruff_studio.workspace_analyzer import WorkspaceAnalyzer, UnifiedViolationModel
 from ruff_studio import database_manager
 
@@ -18,7 +18,10 @@ class TestWorkspaceAnalyzer(unittest.TestCase):
     def test_clear_violations(self):
         # Add a dummy violation
         cursor = self.conn.cursor()
-        cursor.execute("INSERT INTO violations (id, rule_id, file_path) VALUES ('1', 'E501', 'f.py')")
+        cursor.execute(
+            "INSERT INTO violations (id, rule_id, file_path) "
+            "VALUES ('1', 'E501', 'f.py')"
+        )
         self.conn.commit()
         
         # Clear it

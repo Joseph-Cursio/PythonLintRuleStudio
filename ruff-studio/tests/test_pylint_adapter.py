@@ -37,7 +37,9 @@ def test_discover_rules_from_cache(mock_get_version, mock_get_cache):
 @patch('ruff_studio.cache_manager.set_cache')
 @patch('ruff_studio.cache_manager.get_cache')
 @patch('ruff_studio.pylint_adapter.get_pylint_version')
-def test_discover_rules_fresh(mock_get_version, mock_get_cache, mock_set_cache, mock_run):
+def test_discover_rules_fresh(
+    mock_get_version, mock_get_cache, mock_set_cache, mock_run
+):
     """Tests discovering pylint rules from scratch."""
     mock_get_version.return_value = "2.17.4"
     mock_get_cache.return_value = None

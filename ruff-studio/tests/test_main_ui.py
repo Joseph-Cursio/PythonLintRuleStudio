@@ -189,7 +189,8 @@ disable = ["C0103"]
     app.update_idletasks()
 
     # Check that the C0103 rule is correctly identified as "ignore"
-    pylint_rule_widget = app.rules_panel.rule_widgets["Pylint: Convention"]['rules']['C0103']
+    pylint_rule_widget = \
+        app.rules_panel.rule_widgets["Pylint: Convention"]['rules']['C0103']
     assert pylint_rule_widget['radio_variable'].get() == "ignore"
 
     # Check that a ruff rule is "default"
@@ -303,7 +304,9 @@ def test_proposals_dashboard_reject(mock_get, mock_update, app):
         dash = ProposalsDashboard(app)
         dash.current_proposal = mock_p
         dash.reject()
-        mock_update.assert_called_once_with(app.controller.analyzer.conn, "1", "rejected")
+        mock_update.assert_called_once_with(
+            app.controller.analyzer.conn, "1", "rejected"
+        )
 
 def test_select_directory_no_config(app, tmp_path):
     """Tests select_directory when no pyproject.toml exists."""
@@ -312,7 +315,8 @@ def test_select_directory_no_config(app, tmp_path):
             with patch.object(app.controller, 'run_in_thread'):
                 app.select_directory()
                 assert app.controller.current_directory == str(tmp_path)
-                assert app.controller.pyproject_path == os.path.join(str(tmp_path), "pyproject.toml")
+                expected_path = os.path.join(str(tmp_path), "pyproject.toml")
+                assert app.controller.pyproject_path == expected_path
 
 def test_ui_initialization(app):
     """Tests that all expected UI components are created."""
@@ -330,22 +334,31 @@ def test_profile_comparison_logic(app):
     from ruff_studio.ui.comparison_window import ProfileComparisonWindow
     
     mock_p1 = {"profile": {"rules": {"ruff": {"select": ["E"], "ignore": ["F"]}}}}
-    mock_p2 = {"profile": {"rules": {"ruff": {"select": ["F"], "ignore": ["E"]}}}}
+    mock_p2 = {
+        "profile": {"rules": {"ruff": {"select": ["F"], "ignore": ["E"]}}}
+    }
     
-    with patch('ruff_studio.profile_manager.get_built_in_profiles', return_value=["p1", "p2"]):
-        with patch('ruff_studio.profile_manager.load_profile', side_effect=[mock_p1, mock_p2]):
+    with patch(
+        'ruff_studio.profile_manager.get_built_in_profiles',
+        return_value=["p1", "p2"]
+    ):
+        with patch(
+            'ruff_studio.profile_manager.load_profile',
+            side_effect=[mock_p1, mock_p2]
+        ):
             win = ProfileComparisonWindow(app)
             win.profile1_var.set("p1")
             win.profile2_var.set("p2")
             
-            # Patch the compare_profiles to avoid real file logic if needed, 
-            # or rely on the fact that we mocked get_built_in_profiles
             diff = {
                 "select_only_in_1": ["E"], "select_only_in_2": ["F"],
                 "ignore_only_in_1": ["F"], "ignore_only_in_2": ["E"],
                 "common_select": [], "common_ignore": []
             }
-            with patch('ruff_studio.profile_manager.compare_profiles', return_value=diff):
+            with patch(
+                'ruff_studio.profile_manager.compare_profiles',
+                return_value=diff
+            ):
                 win.do_comparison()
                 report = win.results_textbox.get("1.0", "end")
                 assert "Only in 'p1':" in report
@@ -390,7 +403,17 @@ def test_run_full_scan_worker(app):
 
 def test_process_queue_discover(app):
     """Tests that process_queue correctly handles discover_rules command."""
-    mock_data = {"CAT": {"prefix": "C", "rules": [{"code": "C01", "name": "N", "summary": "S", "fix": False, "status": "stable"}]}}
+    mock_data = {
+        "CAT": {
+            "prefix": "C",
+            "rules": [
+                {
+                    "code": "C01", "name": "N", "summary": "S",
+                    "fix": False, "status": "stable"
+                }
+            ]
+        }
+    }
     app.controller.queue.put(("discover_rules", mock_data))
     
     # process_queue calls populate_rules_initial
@@ -435,11 +458,18 @@ def test_generate_pre_commit(app, tmp_path):
     """Tests pre-commit configuration generation."""
     app.controller.current_directory = str(tmp_path)
     with patch('ruff_studio.ruff_adapter.get_ruff_version', return_value="0.1.0"):
-        with patch('ruff_studio.ci_integration.generate_pre_commit_config', return_value="yaml"):
-            with patch('customtkinter.filedialog.asksaveasfilename', return_value=str(tmp_path/"pre.yaml")):
+        with patch(
+            'ruff_studio.ci_integration.generate_pre_commit_config',
+            return_value="yaml"
+        ):
+            filename_mock = patch(
+                'customtkinter.filedialog.asksaveasfilename',
+                return_value=str(tmp_path / "pre.yaml")
+            )
+            with filename_mock:
                 with patch('builtins.open', mock_open()) as m:
                     app.generate_pre_commit_config_file()
-                    m.assert_called_once_with(str(tmp_path/"pre.yaml"), "w")
+                    m.assert_called_once_with(str(tmp_path / "pre.yaml"), "w")
 
 def test_update_results_panel(app):
     """Tests that update_results_panel correctly displays violations."""
@@ -452,8 +482,14 @@ def test_update_results_panel(app):
     )
     
     app.update_results_panel([mock_violation])
-    labels = [w for w in app.results_frame.winfo_children() if isinstance(w, ctk.CTkLabel)]
-    violation_labels = [l for l in labels if "E501" in l.cget("text")]
+    labels = [
+        w for w in app.results_frame.winfo_children()
+        if isinstance(w, ctk.CTkLabel)
+    ]
+    violation_labels = [
+        label for label in labels
+        if "E501" in label.cget("text")
+    ]
     assert len(violation_labels) == 1
     assert "Author: Dev" in violation_labels[0].cget("text")
 
@@ -463,11 +499,15 @@ def test_show_rule_info_with_scrape(app):
     rule["documentation"] = None # Force scrape
     
     # Initialize widget structure for this rule to avoid UI errors
+    mock_frame = MagicMock()
+    mock_frame.winfo_rooty.return_value = 100
+    mock_frame.winfo_height.return_value = 20
+    
     app.rules_panel.rule_widgets["Error"] = {
         'prefix': 'E',
         'rules': {
             'E501': {
-                'frame': MagicMock(),
+                'frame': mock_frame,
                 'effective_state_variable': MagicMock(),
                 'radio_variable': MagicMock()
             }

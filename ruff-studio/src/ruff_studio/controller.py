@@ -1,11 +1,10 @@
 import os
 import queue
 import threading
-import copy
 import logging
 from . import (
     ruff_adapter, pylint_adapter, config_manager, 
-    workspace_analyzer, profile_manager
+    workspace_analyzer
 )
 
 class StudioController:
@@ -159,13 +158,17 @@ class StudioController:
         """Calculates the final boolean on/off state of a rule."""
         if rule_code in self.staged_changes:
             state = self.staged_changes[rule_code]
-            if state == "select": return True
-            if state == "ignore": return False
+            if state == "select":
+                return True
+            if state == "ignore":
+                return False
 
         if category_prefix in self.staged_changes:
             state = self.staged_changes[category_prefix]
-            if state == "select": return True
-            if state == "ignore": return False
+            if state == "select":
+                return True
+            if state == "ignore":
+                return False
 
         # Fallback to current saved config
         ruff_config = config_manager.get_ruff_config(self.pyproject_data)

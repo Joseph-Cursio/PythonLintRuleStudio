@@ -1,5 +1,4 @@
 import customtkinter as ctk
-from dataclasses import asdict
 
 class ResultsPanel(ctk.CTkScrollableFrame):
     def __init__(self, master, controller, **kwargs):
@@ -7,7 +6,9 @@ class ResultsPanel(ctk.CTkScrollableFrame):
         self.master = master
         self.controller = controller
         
-        self.results_label = ctk.CTkLabel(self, text="Scan Results", font=("", 16, "bold"))
+        self.results_label = ctk.CTkLabel(
+            self, text="Scan Results", font=("", 16, "bold")
+        )
         self.results_label.pack(pady=10)
 
     def clear(self):
@@ -17,6 +18,7 @@ class ResultsPanel(ctk.CTkScrollableFrame):
 
     def set_results(self, results):
         self.clear()
+        self._parent_canvas.yview_moveto(0)
         count = len(results)
         self.results_label.configure(text=f"Scan Results ({count})")
         
@@ -39,6 +41,7 @@ class ResultsPanel(ctk.CTkScrollableFrame):
 
     def set_simulation_results(self, sim_results):
         self.clear()
+        self._parent_canvas.yview_moveto(0)
         self.results_label.configure(text="Simulation Results")
         
         if not sim_results:

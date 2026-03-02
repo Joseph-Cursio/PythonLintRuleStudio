@@ -43,7 +43,10 @@ class TestRuffAdapter(unittest.TestCase):
     def test_scrape_rule_documentation(self, mock_get):
         # Success
         mock_response = MagicMock()
-        mock_response.content = b'<article class="md-content__inner"><h2>What it does</h2><p>Rule desc</p></article>'
+        mock_response.content = (
+            b'<article class="md-content__inner">'
+            b'<h2>What it does</h2><p>Rule desc</p></article>'
+        )
         mock_response.status_code = 200
         mock_response.raise_for_status.return_value = None
         mock_get.return_value = mock_response
@@ -62,7 +65,10 @@ class TestRuffAdapter(unittest.TestCase):
     def test_discover_rules_fresh(self, mock_version, mock_run_ruff, mock_cache):
         mock_version.return_value = "0.1.0"
         mock_run_ruff.return_value = json.dumps([
-            {"name": "Unused import", "code": "F401", "linter": "pyflakes", "deprecated": False}
+            {
+                "name": "Unused import", "code": "F401",
+                "linter": "pyflakes", "deprecated": False
+            }
         ])
         mock_cache.get_cache.return_value = None
 
