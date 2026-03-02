@@ -101,7 +101,10 @@ def generate_impact_report(
     report.append("\n## Summary of Changes")
     
     # Simple heuristic to find diff in rules (very basic)
-    report.append("This proposal modifies the project's linting configuration to align with updated quality standards.")
+    report.append(
+        "This proposal modifies the project's linting configuration to "
+        "align with updated quality standards."
+    )
     
     report.append("\n## Impact Analysis")
     sim_count = len(impact_simulation)

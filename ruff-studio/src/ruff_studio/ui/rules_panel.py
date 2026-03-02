@@ -172,14 +172,16 @@ class RulesPanel(ctk.CTkFrame):
                     }
                     self.controller.navigable_items.append(rule_item)
         
-        # Re-sync navigable_index to point to the current selected item if it's still there
+        # Re-sync navigable_index to point to the current selected item
+        # if it's still there
         if self.controller.selected_item:
             for i, item in enumerate(self.controller.navigable_items):
                 if item == self.controller.selected_item:
                     self.controller.navigable_index = i
                     break
             else:
-                # If selected item is now hidden, fallback to its category if it's a rule
+                # If selected item is now hidden, fallback to its category
+                # if it's a rule
                 if self.controller.selected_item['type'] == 'rule':
                     cat_name = self.controller.selected_item['category_name']
                     for i, item in enumerate(self.controller.navigable_items):

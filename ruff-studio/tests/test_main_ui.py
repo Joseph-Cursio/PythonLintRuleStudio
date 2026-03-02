@@ -553,9 +553,15 @@ def test_analytics_window_loading(app):
     mock_authors = {"Alice": 5, "Bob": 5}
     mock_hotspots = {"E501": 8, "F401": 2}
     
-    with patch.object(app.controller, 'get_scan_history', return_value=mock_history):
-        with patch.object(app.controller, 'get_author_stats', return_value=mock_authors):
-            with patch.object(app.controller, 'get_rule_hotspots', return_value=mock_hotspots):
+    with patch.object(
+        app.controller, 'get_scan_history', return_value=mock_history
+    ):
+        with patch.object(
+            app.controller, 'get_author_stats', return_value=mock_authors
+        ):
+            with patch.object(
+                app.controller, 'get_rule_hotspots', return_value=mock_hotspots
+            ):
                 win = AnalyticsWindow(app, app.controller)
                 app.update_idletasks()
                 
@@ -566,8 +572,10 @@ def test_analytics_window_loading(app):
                     for sub in widget.winfo_children():
                         if isinstance(sub, ctk.CTkLabel):
                             text = sub.cget("text")
-                            if "Latest Scan: 10" in text: found_latest = True
-                            if "Alice: 5" in text: found_author = True
+                            if "Latest Scan: 10" in text:
+                                found_latest = True
+                            if "Alice: 5" in text:
+                                found_author = True
                 
                 assert found_latest
                 assert found_author
@@ -611,7 +619,6 @@ def test_proposal_window_with_push(
 def test_dashboard_copy_report(app):
     """Tests that ProposalsDashboard correctly copies reports to clipboard."""
     from ruff_studio.ui.dashboard_window import ProposalsDashboard
-    import json
     
     mock_p = {
         "id": "1", "title": "T", "status": "pending", "author": "A", 

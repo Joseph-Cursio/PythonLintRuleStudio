@@ -132,7 +132,10 @@ class TestWorkspaceAnalyzer(unittest.TestCase):
         # Must also wrap cursor to return real data from real conn
         mock_conn.cursor.side_effect = self.conn.cursor
 
-        with patch('ruff_studio.database_manager.create_connection', return_value=mock_conn):
+        with patch(
+            'ruff_studio.database_manager.create_connection',
+            return_value=mock_conn
+        ):
             # 2. Test History
             history = self.analyzer.get_scan_history()
             self.assertEqual(len(history), 2)
