@@ -12,6 +12,7 @@ from . import (
     ruff_adapter, config_manager, workspace_analyzer, profile_manager, 
     ci_integration, pylint_adapter, git_adapter, proposal_manager
 )
+from .controller import StudioController
 from .ui.proposal_window import ProposalWindow
 from .ui.dashboard_window import ProposalsDashboard
 from .ui.comparison_window import ProfileComparisonWindow
@@ -53,26 +54,36 @@ class App(ctk.CTk):
         else:
             self.tk = MagicMock()
 
-        self.current_directory = None
-        self.pyproject_path = None
-        self.pyproject_data = None
-        self.enabled_rules = set()
-        self.all_rules = []
+        self.controller = StudioController()
         self.rule_widgets = {}
-        self.staged_changes = {}
-        self.base_scan_results = []
         self.selected_rule_frame = None
         self.selected_category_frame = None
-        self.navigable_index = 0
-        self.navigable_items = []
-        self.selected_item = None
-
-        self.analyzer = workspace_analyzer.WorkspaceAnalyzer("ruff_studio.db")
-        self.queue = queue.Queue()
 
         if not headless:
-            self.run_in_thread(self._discover_rules_worker, "discover_rules")
+            self.controller.run_in_thread(
+                self.controller.discover_rules_worker, "discover_rules"
+            )
             self.process_queue()
+
+    @property
+    def analyzer(self):
+        return self.controller.analyzer
+
+    @property
+    def current_directory(self):
+        return self.controller.current_directory
+
+    @property
+    def pyproject_path(self):
+        return self.controller.pyproject_path
+
+    @property
+    def pyproject_data(self):
+        return self.controller.pyproject_data
+
+    @property
+    def staged_changes(self):
+        return self.controller.staged_changes
 
     def _init_ui(self):
         # Create main layout
@@ -255,64 +266,29 @@ class App(ctk.CTk):
     def run_in_thread(self, worker, command_name, *args):
         self.select_button.configure(state="disabled")
         self.status_label.configure(text="Running...")
-        thread = threading.Thread(target=worker, args=(command_name, *args))
-        thread.daemon = True
-        thread.start()
-
-    def _discover_rules_worker(self, command_name):
-        try:
-            ruff_rules = ruff_adapter.discover_rules()
-            pylint_rules = pylint_adapter.discover_rules()
-
-            # Combine rules, prefixing pylint categories to avoid name clashes
-            combined_rules = ruff_rules
-            for category, data in pylint_rules.items():
-                combined_rules[f"Pylint: {category}"] = data
-
-            self.queue.put((command_name, combined_rules))
-        except (RuntimeError, FileNotFoundError) as e:
-            self.queue.put(("error", e))
-
-
-    def _run_full_scan_worker(self, command_name, directory):
-        try:
-            results = self.analyzer.run_full_scan(directory)
-            self.queue.put((command_name, results))
-        except (RuntimeError, FileNotFoundError) as e:
-            self.queue.put(("error", e))
+        self.controller.run_in_thread(worker, command_name, *args)
 
     def process_queue(self):
         try:
-            command, data = self.queue.get_nowait()
+            while True:
+                command, data = self.controller.queue.get_nowait()
 
-            if command == "error":
-                if isinstance(data, FileNotFoundError):
-                    messagebox.showerror("Error", "Ruff executable not found...")
-                else:
+                if command == "error":
                     error_message = f"An unexpected error occurred:\n\n{data}"
                     messagebox.showerror("Error", error_message)
-            elif command == "discover_rules":
-                self.all_rules = data
-                self.rules_label.configure(text="Rules")
-                self.populate_rules_initial()
-                if not isinstance(self.all_rules, dict):
-                    return
-                self.managed_prefixes = {
-                    cat['prefix'] for cat in self.all_rules.values()
-                }
-                self.managed_rules = {
-                    rule['code']
-                    for cat in self.all_rules.values()
-                    for rule in cat['rules']
-                }
-            elif command == "run_full_scan":
-                self.base_scan_results = data
-                self.update_results_panel(data)
-            elif command == "run_simulation":
-                self.update_simulation_results_panel(data)
+                elif command == "discover_rules":
+                    self.controller.all_rules = data
+                    self.rules_label.configure(text="Rules")
+                    self.populate_rules_initial()
+                elif command == "run_full_scan":
+                    self.controller.base_scan_results = data
+                    self.update_results_panel(data)
+                elif command == "run_simulation":
+                    self.update_simulation_results_panel(data)
 
-            self.select_button.configure(state="normal")
-            self.status_label.configure(text="")
+                self.select_button.configure(state="normal")
+                self.status_label.configure(text="")
+                self.controller.queue.task_done()
 
         except queue.Empty:
             pass
@@ -324,34 +300,18 @@ class App(ctk.CTk):
             directory = filedialog.askdirectory()
 
         if directory:
-            self.current_directory = directory
+            self.controller.set_directory(directory)
             self.directory_label.configure(text=directory)
-            self.pyproject_path = os.path.join(directory, "pyproject.toml")
-            self.staged_changes = {}
-            self.simulate_button.configure(state="disabled")
-            self.apply_button.configure(state="disabled")
-
-            if os.path.exists(self.pyproject_path):
-                self.pyproject_data = config_manager.read_pyproject(self.pyproject_path)
-                ruff_config = config_manager.get_ruff_config(self.pyproject_data)
-                pylint_config = config_manager.get_pylint_config(self.pyproject_data)
-
-                ruff_enabled = self._get_ruff_rules_from_config(ruff_config)
-                pylint_enabled = self._get_pylint_rules_from_config(pylint_config)
-                self.enabled_rules = ruff_enabled.union(pylint_enabled)
-            else:
-                self.pyproject_data = tomlkit.document()
-                # Get default ruff rules, assume all pylint rules are enabled by default
-                ruff_enabled = ruff_adapter.get_default_rules()
-                pylint_enabled = self._get_pylint_rules_from_config({})
-                self.enabled_rules = ruff_enabled.union(pylint_enabled)
-
+            
+            # Clear UI results
             for widget in self.results_frame.winfo_children():
                 if widget != self.results_label:
                     widget.destroy()
             self.results_label.configure(text="Scanning...")
 
-            self.run_in_thread(self._run_full_scan_worker, "run_full_scan", directory)
+            self.controller.run_in_thread(
+                self.controller.run_full_scan_worker, "run_full_scan", directory
+            )
             self.update_rules_panel()
             self.profile_menu.configure(state="normal")
             self.generate_pre_commit_button.configure(state="normal")
@@ -440,15 +400,15 @@ class App(ctk.CTk):
 
     def populate_rules_initial(self):
         # Use the natural insertion order of categories from the dictionary
-        categories = self.all_rules.items()
+        categories = self.controller.all_rules.items()
 
         # Create a list of navigable items (categories and rules) in display order
-        self.navigable_items = []
+        self.controller.navigable_items = []
         for category_name, category_data in categories:
             category_item = {
                 'type': 'category', 'name': category_name, 'data': category_data
             }
-            self.navigable_items.append(category_item)
+            self.controller.navigable_items.append(category_item)
             sorted_rules = sorted(
                 category_data['rules'], key=lambda r: r['code']
             )
@@ -456,7 +416,7 @@ class App(ctk.CTk):
                 rule_item = {
                     'type': 'rule', 'data': rule, 'category_name': category_name
                 }
-                self.navigable_items.append(rule_item)
+                self.controller.navigable_items.append(rule_item)
 
 
         for category_name, category_data in categories:
@@ -735,19 +695,18 @@ class App(ctk.CTk):
                 return "ignore"
             return "default"
     def update_rules_panel(self):
-        if not self.current_directory:
+        if not self.controller.current_directory:
             return
 
-        ruff_config = config_manager.get_ruff_config(self.pyproject_data)
-        pylint_config = config_manager.get_pylint_config(self.pyproject_data)
+        ruff_config, pylint_config = self.controller.get_effective_configs()
 
         for category_name, category_widgets in self.rule_widgets.items():
             prefix = category_widgets['prefix']
 
             # Update category radio buttons
-            cat_state = self.staged_changes.get(
+            cat_state = self.controller.staged_changes.get(
                 prefix, 
-                self._get_explicit_rule_state(prefix, ruff_config, pylint_config)
+                self.controller.get_explicit_rule_state(prefix, ruff_config, pylint_config)
             )
             category_widgets['radio_variable'].set(cat_state)
 
@@ -756,16 +715,16 @@ class App(ctk.CTk):
 
             for rule_code, rule_widget in category_widgets['rules'].items():
                 # Update rule radio buttons
-                rule_state = self.staged_changes.get(
+                rule_state = self.controller.staged_changes.get(
                     rule_code, 
-                    self._get_explicit_rule_state(
+                    self.controller.get_explicit_rule_state(
                         rule_code, ruff_config, pylint_config
                     )
                 )
                 rule_widget['radio_variable'].set(rule_state)
 
                 # Update effective state indicator
-                is_on = self._get_effective_rule_state(rule_code, prefix)
+                is_on = self.controller.get_effective_rule_state(rule_code, prefix)
                 rule_widget['effective_state_variable'].set("on" if is_on else "off")
 
                 if is_on:
@@ -783,45 +742,51 @@ class App(ctk.CTk):
                 category_widgets['effective_state_variable'].set("off")
 
     def stage_rule_change(self, rule_code, state):
-        self.staged_changes[rule_code] = state
+        self.controller.staged_changes[rule_code] = state
         self.simulate_button.configure(state="normal")
         self.apply_button.configure(state="normal")
         self.update_rules_panel()
 
     def stage_category_change(self, prefix, state):
-        self.staged_changes[prefix] = state
+        self.controller.staged_changes[prefix] = state
         self.simulate_button.configure(state="normal")
         self.apply_button.configure(state="normal")
-        # Update all rules under this category to reflect the change
-        for category_name, category_data in self.rule_widgets.items():
+        
+        # Clear individual rule stagings for this category
+        for category_data in self.controller.all_rules.values():
             if category_data['prefix'] == prefix:
-                for rule_code in category_data['rules'].keys():
-                    if rule_code in self.staged_changes:
-                        del self.staged_changes[rule_code]
+                for rule in category_data['rules']:
+                    rule_code = rule['code']
+                    if rule_code in self.controller.staged_changes:
+                        del self.controller.staged_changes[rule_code]
                 break
         self.update_rules_panel()
 
     def toggle_category_rules(self, category_name):
         container = self.rule_widgets[category_name]['rules_container']
         toggle_button = self.rule_widgets[category_name]['toggle_button']
-        category_frame = self.rule_widgets[category_name]['category_frame']
         if container.winfo_viewable():
             container.pack_forget()
-            toggle_button.configure(text="►")
+            toggle_button.configure(text="▶")
         else:
-            container.pack(fill="x", padx=(25, 5), after=category_frame)
+            container.pack(fill="x", padx=(25, 5))
             toggle_button.configure(text="▼")
 
-
     def simulate_changes(self):
-        if not self.pyproject_data:
-            return
-        sim_config_data = self.get_effective_config()
-        self.results_label.configure(text="Simulating...")
-        self.run_in_thread(
-            ruff_adapter.run_scan_with_config, "run_simulation",
-            self.current_directory, sim_config_data
+        ruff_config, _ = self.controller.get_effective_configs()
+        self.status_label.configure(text="Simulating...")
+        self.controller.run_in_thread(
+            self._run_simulation_worker, "run_simulation", ruff_config
         )
+
+    def _run_simulation_worker(self, command, ruff_config):
+        try:
+            results = ruff_adapter.run_scan_with_config(
+                self.controller.current_directory, ruff_config
+            )
+            self.controller.queue.put((command, results))
+        except Exception as e:
+            self.controller.queue.put(("error", str(e)))
 
     def apply_profile(self, profile_name):
         if profile_name == "Apply a Profile...":
@@ -829,99 +794,81 @@ class App(ctk.CTk):
 
         try:
             profile_data = profile_manager.load_profile(profile_name)
-
-            # We don't need to apply to a config copy, as we'll just read the 
-            # rules and then stage changes through the existing UI logic.
             rules_all = profile_data.get("profile", {}).get("rules", {})
             profile_ruff_config = rules_all.get("ruff", {})
 
-            # Reset staged changes
-            self.staged_changes = {}
+            self.controller.staged_changes = {}
 
-            # --- Ruff Profile Application ---
+            # --- Ruff Profile ---
             if profile_ruff_config:
                 dummy_ruff_config = {
                     "select": profile_ruff_config.get("select", []), 
                     "ignore": profile_ruff_config.get("ignore", [])
                 }
-                profile_ruff_rules = self._get_ruff_rules_from_config(
+                profile_ruff_rules = self.controller._get_ruff_rules_from_config(
                     dummy_ruff_config
                 )
                 for cat_name, cat_widgets in self.rule_widgets.items():
                     if cat_name.startswith("Pylint:"):
-                        continue  # Skip pylint categories for ruff logic
+                        continue
                     for rule_code in cat_widgets['rules'].keys():
                         if rule_code in profile_ruff_rules:
-                            self.staged_changes[rule_code] = "select"
+                            self.controller.staged_changes[rule_code] = "select"
                         else:
-                            self.staged_changes[rule_code] = "ignore"
+                            self.controller.staged_changes[rule_code] = "ignore"
 
-            # --- Pylint Profile Application ---
+            # --- Pylint Profile ---
             profile_pylint_config = rules_all.get("pylint", {})
             if profile_pylint_config:
-                # Pylint is default-on, so we only need to stage disabled rules
-                pylint_disabled_rules = profile_pylint_config.get("disable", [])
+                disabled = profile_pylint_config.get("disable", [])
                 for cat_name, cat_widgets in self.rule_widgets.items():
                     if not cat_name.startswith("Pylint:"):
                         continue
                     for rule_code in cat_widgets['rules'].keys():
-                        if rule_code in pylint_disabled_rules:
-                            self.staged_changes[rule_code] = "ignore"
+                        if rule_code in disabled:
+                            self.controller.staged_changes[rule_code] = "ignore"
                         else:
-                            # If not explicitly disabled, it should be on
-                            self.staged_changes[rule_code] = "default"
+                            self.controller.staged_changes[rule_code] = "default"
 
-            # Ensure the UI reflects the newly staged changes
             self.update_rules_panel()
             self.simulate_button.configure(state="normal")
             self.apply_button.configure(state="normal")
-
-            messagebox.showinfo(
-                "Profile Applied",
-                f"The '{profile_name}' profile has been staged. "
-                "Review the changes and click 'Simulate' or 'Apply'."
-            )
+            messagebox.showinfo("Profile Applied", f"Profile '{profile_name}' staged.")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to apply profile: {e}")
         finally:
             self.profile_menu.set("Apply a Profile...")
 
-
     def apply_changes(self, show_proposal_window=True):
-        if not self.pyproject_data or not self.pyproject_path:
+        if not self.controller.pyproject_data or not self.controller.pyproject_path:
             return
 
-        ruff_config, pylint_config = self.get_effective_configs()
+        ruff_config, pylint_config = self.controller.get_effective_configs()
+        config_before = config_manager.read_pyproject_text(self.controller.pyproject_path)
         
-        # Capture configs for proposal
-        config_before = config_manager.read_pyproject_text(self.pyproject_path)
-        
-        # Create a copy of the data to get the 'after' text without writing yet
-        after_data = copy.deepcopy(self.pyproject_data)
+        after_data = copy.deepcopy(self.controller.pyproject_data)
         config_manager.update_ruff_config(after_data, ruff_config)
         config_manager.update_pylint_config(after_data, pylint_config)
         config_after = config_manager.get_pyproject_text(after_data)
 
         if show_proposal_window:
-            # Quick simulation for the proposal metadata
-            impact_simulation = ruff_adapter.run_scan_with_config(
-                self.current_directory, ruff_config
+            impact = ruff_adapter.run_scan_with_config(
+                self.controller.current_directory, ruff_config
             )
-            ProposalWindow(self, config_before, config_after, impact_simulation)
+            ProposalWindow(self, config_before, config_after, impact)
             return
 
-        # Actual application
-        config_manager.update_ruff_config(self.pyproject_data, ruff_config)
-        config_manager.update_pylint_config(self.pyproject_data, pylint_config)
-        config_manager.write_pyproject(self.pyproject_path, self.pyproject_data)
+        config_manager.update_ruff_config(self.controller.pyproject_data, ruff_config)
+        config_manager.update_pylint_config(self.controller.pyproject_data, pylint_config)
+        config_manager.write_pyproject(self.controller.pyproject_path, self.controller.pyproject_data)
 
-        self.staged_changes = {}
+        self.controller.staged_changes = {}
         self.simulate_button.configure(state="disabled")
         self.apply_button.configure(state="disabled")
-
         self.update_rules_panel()
-        self.run_in_thread(
-            self._run_full_scan_worker, "run_full_scan", self.current_directory
+        self.controller.run_in_thread(
+            self.controller.run_full_scan_worker, "run_full_scan", 
+            self.controller.current_directory
         )
 
     def open_comparison_window(self):
@@ -931,196 +878,102 @@ class App(ctk.CTk):
         ProposalsDashboard(self)
 
     def generate_pre_commit_config_file(self):
-        """Generates and saves a .pre-commit-config.yaml file."""
         try:
             ruff_version = ruff_adapter.get_ruff_version()
             config_content = ci_integration.generate_pre_commit_config(ruff_version)
-
             filepath = filedialog.asksaveasfilename(
-                initialdir=self.current_directory,
+                initialdir=self.controller.current_directory,
                 initialfile=".pre-commit-config.yaml",
                 defaultextension=".yaml",
                 filetypes=[("YAML files", "*.yaml"), ("All files", "*.*")],
             )
-
             if filepath:
                 with open(filepath, "w") as f:
                     f.write(config_content)
-                messagebox.showinfo("Success", f"Successfully saved {filepath}")
-
+                messagebox.showinfo("Success", f"Saved to {filepath}")
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to generate pre-commit config: {e}")
-
-    def get_effective_configs(self):
-        """
-        Calculates the effective ruff and pylint configurations based on staged changes.
-        Returns a tuple of (ruff_config, pylint_config).
-        """
-        # --- Ruff ---
-        ruff_config = config_manager.get_ruff_config(self.pyproject_data).copy()
-        ruff_select = set(ruff_config.get("select", []))
-        ruff_ignore = set(ruff_config.get("ignore", []))
-
-        # --- Pylint ---
-        pylint_config = config_manager.get_pylint_config(self.pyproject_data).copy()
-        pylint_enable = set(pylint_config.get("enable", []))
-        pylint_disable = set(pylint_config.get("disable", []))
-
-        for code, state in self.staged_changes.items():
-            if self.is_pylint_rule(code):
-                if state == "select":
-                    pylint_enable.add(code)
-                    pylint_disable.discard(code)
-                elif state == "ignore":
-                    pylint_disable.add(code)
-                    pylint_enable.discard(code)
-                elif state == "default":
-                    pylint_enable.discard(code)
-                    pylint_disable.discard(code)
-            else:  # Assume ruff
-                if state == "select":
-                    ruff_select.add(code)
-                    ruff_ignore.discard(code)
-                elif state == "ignore":
-                    ruff_ignore.add(code)
-                elif state == "default":
-                    ruff_select.discard(code)
-                    ruff_ignore.discard(code)
-
-        ruff_config["select"] = sorted(list(ruff_select))
-        ruff_config["ignore"] = sorted(list(ruff_ignore))
-
-        # Only add lists if they are not empty
-        if pylint_enable:
-            pylint_config["enable"] = sorted(list(pylint_enable))
-        elif "enable" in pylint_config:
-            del pylint_config["enable"]
-
-        if pylint_disable:
-            pylint_config["disable"] = sorted(list(pylint_disable))
-        elif "disable" in pylint_config:
-            del pylint_config["disable"]
-
-        return ruff_config, pylint_config
+            messagebox.showerror("Error", f"Failed: {e}")
 
     def navigate_items(self, event):
-        if not self.selected_item or not self.navigable_items:
+        if not self.controller.navigable_items:
             return
-
-        try:
-            current_index = self.navigable_items.index(self.selected_item)
-        except ValueError:
-            return # Should not happen if selection is managed properly
-
         if event.keysym == "Up":
-            next_index = max(0, current_index - 1)
+            self.controller.navigable_index = max(0, self.controller.navigable_index - 1)
         elif event.keysym == "Down":
-            next_index = min(len(self.navigable_items) - 1, current_index + 1)
+            self.controller.navigable_index = min(
+                len(self.controller.navigable_items) - 1, self.controller.navigable_index + 1
+            )
+        item = self.controller.navigable_items[self.controller.navigable_index]
+        if item['type'] == 'rule':
+            self.show_rule_info(item['data'], item['category_name'])
         else:
-            return
-
-        if next_index != current_index:
-            next_item = self.navigable_items[next_index]
-            if next_item['type'] == 'rule':
-                self.show_rule_info(next_item['data'], next_item['category_name'])
-            elif next_item['type'] == 'category':
-                self.select_category(next_item['name'])
+            self.select_category(item['name'])
 
     def select_category(self, category_name):
-        # Find the full item from the navigable list and update index
-        for i, item in enumerate(self.navigable_items):
+        for i, item in enumerate(self.controller.navigable_items):
             if item['type'] == 'category' and item['name'] == category_name:
-                self.selected_item = item
-                self.navigable_index = i
+                self.controller.selected_item = item
+                self.controller.navigable_index = i
                 break
-
-        # Reset any previously selected frames
         if self.selected_rule_frame:
             self.selected_rule_frame.configure(fg_color="transparent")
         if self.selected_category_frame:
             self.selected_category_frame.configure(fg_color="transparent")
-
-        # Highlight the new selected category
         if category_name in self.rule_widgets:
-            widgets = self.rule_widgets[category_name]
-            self.selected_category_frame = widgets['category_frame']
+            self.selected_category_frame = self.rule_widgets[category_name]['category_frame']
             self.selected_category_frame.configure(fg_color="lightblue")
-
-        # Clear the info panel
         for widget in self.info_frame.winfo_children():
-            if widget != self.info_label:
-                widget.destroy()
+            if widget != self.info_label: widget.destroy()
         self.info_label.configure(text="Rule Info")
 
-
     def show_rule_info(self, rule, category_name=None):
-        # Find the full item from the navigable list and update index
-        for i, item in enumerate(self.navigable_items):
+        for i, item in enumerate(self.controller.navigable_items):
             if item['type'] == 'rule' and item['data'] == rule:
-                self.selected_item = item
-                self.navigable_index = i
+                self.controller.selected_item = item
+                self.controller.navigable_index = i
                 break
-
-        # Reset any previously selected frames
         if self.selected_rule_frame:
             self.selected_rule_frame.configure(fg_color="transparent")
         if self.selected_category_frame:
             self.selected_category_frame.configure(fg_color="transparent")
-        # Highlight the new selected rule
+        
         rule_code = rule['code']
-        cat_name_for_widget = (
-            category_name or self.selected_item.get('category_name')
-        )
-
-        if (cat_name_for_widget in self.rule_widgets and
-                rule_code in self.rule_widgets[cat_name_for_widget]['rules']):
-            widgets = self.rule_widgets[cat_name_for_widget]['rules'][rule_code]
-            self.selected_rule_frame = widgets['frame']
+        cat_name = category_name or self.controller.selected_item.get('category_name')
+        if cat_name in self.rule_widgets and rule_code in self.rule_widgets[cat_name]['rules']:
+            self.selected_rule_frame = self.rule_widgets[cat_name]['rules'][rule_code]['frame']
             self.selected_rule_frame.configure(fg_color="lightblue")
 
         for widget in self.info_frame.winfo_children():
-            if widget != self.info_label:
-                widget.destroy()
+            if widget != self.info_label: widget.destroy()
+        self.info_label.configure(text=f"Rule: {rule['code']}")
+        ctk.CTkLabel(self.info_frame, text=f"Name: {rule['name']}", wraplength=250).pack(pady=5, anchor="w")
+        ctk.CTkLabel(self.info_frame, text=f"Summary: {rule['summary']}", wraplength=250, justify="left").pack(pady=5, anchor="w")
+        self._init_doc_viewer(rule)
 
-        ctk.CTkLabel(
-            self.info_frame, text=f"Code: {rule['code']}", wraplength=250
-        ).pack(pady=5, anchor="w")
-
-        source = "Pylint" if self.is_pylint_rule(rule['code']) else "Ruff"
-        ctk.CTkLabel(
-            self.info_frame, text=f"Source: {source} Linter", wraplength=250,
-            font=("", 12, "italic")
-        ).pack(pady=5, anchor="w")
-        ctk.CTkLabel(
-            self.info_frame, text=f"Name: {rule['name']}", wraplength=250
-        ).pack(pady=5, anchor="w")
-        ctk.CTkLabel(
-            self.info_frame, text=f"Fixable: {'Yes' if rule['fix'] else 'No'}",
-            wraplength=250
-        ).pack(pady=5, anchor="w")
-        ctk.CTkLabel(
-            self.info_frame, text=f"Summary: {rule['summary']}",
-            wraplength=250, justify="left"
-        ).pack(pady=5, anchor="w")
-
-        if rule.get("documentation") is None and not self.is_pylint_rule(rule['code']):
-            # If documentation is missing, and it's a ruff rule, scrape it now.
-            self.status_label.configure(text=f"Fetching docs for {rule['code']}...")
-            self.update_idletasks()
-            # This runs in the main thread, which can cause a brief UI freeze.
-            # For a better user experience, this could be moved to a background thread.
-            rule['documentation'] = ruff_adapter.scrape_rule_documentation(rule['name'])
-            self.status_label.configure(text="")
-            # No need to update the cache here, as the rule object is 
-            # updated in-memory and will be re-cached the next time 
-            # the app starts if rules are re-discovered.
-
+    def _init_doc_viewer(self, rule):
         if rule.get("documentation"):
-            # Use a Textbox for better scrolling and text selection
-            doc_textbox = ctk.CTkTextbox(self.info_frame, wrap="word", height=400)
-            doc_textbox.pack(pady=(10, 5), fill="both", expand=True)
-            doc_textbox.insert("1.0", rule["documentation"])
-            doc_textbox.configure(state="disabled")
+            txt = ctk.CTkTextbox(self.info_frame, wrap="word", height=400)
+            txt.pack(pady=(10, 5), fill="both", expand=True)
+            txt.insert("1.0", rule["documentation"])
+            txt.configure(state="disabled")
+        elif not self.controller.is_pylint_rule(rule['code']):
+            self.scrape_button = ctk.CTkButton(
+                self.info_frame, text="Fetch Documentation Online",
+                command=lambda: self.fetch_rule_docs(rule)
+            )
+            self.scrape_button.pack(pady=10)
+
+    def fetch_rule_docs(self, rule):
+        self.scrape_button.configure(state="disabled", text="Fetching...")
+        self.status_label.configure(text="Scraping documentation...")
+        self.controller.run_in_thread(self._fetch_docs_worker, "fetch_docs", rule)
+
+    def _fetch_docs_worker(self, command, rule):
+        try:
+            docs = ruff_adapter.scrape_rule_documentation(rule['code'])
+            self.controller.queue.put((command, (rule, docs)))
+        except Exception as e:
+            self.controller.queue.put(("error", str(e)))
 
 
 if __name__ == "__main__":

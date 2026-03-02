@@ -28,6 +28,8 @@ def get_ruff_config(pyproject_data):
     Extracts the ruff lint configuration from the pyproject data.
     Returns an empty dict if not found.
     """
+    if pyproject_data is None:
+        return {}
     return pyproject_data.get("tool", {}).get("ruff", {}).get("lint", {})
 
 def update_ruff_config(pyproject_data, ruff_lint_config):
@@ -43,6 +45,8 @@ def get_pylint_config(pyproject_data):
     Extracts the pylint configuration from the pyproject data.
     Returns an empty dict if not found.
     """
+    if pyproject_data is None:
+        return {}
     # Pylint config can be under [tool.pylint] or [tool.pylint.messages_control]
     # For now, we'll assume a simple structure under [tool.pylint] for rule management
     return pyproject_data.get("tool", {}).get("pylint", {})

@@ -1,6 +1,7 @@
 import pytest
 import os
 from ruff_studio.main import App
+from ruff_studio.controller import StudioController
 from unittest.mock import patch, MagicMock, mock_open
 import tomlkit
 
@@ -52,14 +53,15 @@ def app():
     # Patch the `run_in_thread` method to prevent background tasks from
     # running during the test and interfering with our mock data.
     with patch.object(App, 'run_in_thread', return_value=None):
-        app_instance = App()
+        with patch.object(StudioController, 'run_in_thread', return_value=None):
+            app_instance = App()
 
-    # Manually set the rules data, bypassing the threaded discovery
-    app_instance.all_rules = MOCK_RULES
-    app_instance.current_directory = "/fake/dir"
-    app_instance.pyproject_path = "/fake/dir/pyproject.toml"
-    app_instance.pyproject_data = tomlkit.parse("dummy = true")
-    app_instance.analyzer.conn = MagicMock()
+    # Manually set the rules data via controller
+    app_instance.controller.all_rules = MOCK_RULES
+    app_instance.controller.current_directory = "/fake/dir"
+    app_instance.controller.pyproject_path = "/fake/dir/pyproject.toml"
+    app_instance.controller.pyproject_data = tomlkit.parse("dummy = true")
+    app_instance.controller.analyzer.conn = MagicMock()
 
     # Manually call the UI population method to create the widgets
     app_instance.populate_rules_initial()
@@ -94,9 +96,8 @@ def test_toggle_category_rules(app):
     app.update_idletasks() # Process the UI event
 
     # The container should now be hidden.
-    # The button text should update to indicate it can be expanded (e.g., "►").
     assert rules_container.winfo_viewable() == 0
-    assert toggle_button.cget("text") == "►"
+    assert toggle_button.cget("text") == "▶"
 
     # --- 3. Second Click: Expand the view ---
     # Simulate a second click on the same button.
@@ -116,7 +117,7 @@ def test_visual_keyboard_navigation(app):
     # The navigable list should contain categories and their rules in their
     # natural (non-alphabetical) display order.
     nav_item_reprs = []
-    for item in app.navigable_items:
+    for item in app.controller.navigable_items:
         if item['type'] == 'category':
             nav_item_reprs.append(f"CAT:{item['name']}")
         else:
@@ -136,36 +137,36 @@ def test_visual_keyboard_navigation(app):
 
     # --- 2. Start Selection ---
     # Start by selecting the first rule, E501.
-    target_rule = app.navigable_items[1]['data']
-    target_cat = app.navigable_items[1]['category_name']
+    target_rule = app.controller.navigable_items[1]['data']
+    target_cat = app.controller.navigable_items[1]['category_name']
     app.show_rule_info(target_rule, target_cat)
     app.update_idletasks()
-    assert app.selected_item['data']['code'] == 'E501'
+    assert app.controller.selected_item['data']['code'] == 'E501'
 
     # --- 3. Navigate Up to Category ---
     # Pressing Up from the first rule should select its category header.
     app.navigate_items(up_event)
     app.update_idletasks()
-    assert app.selected_item['type'] == 'category'
-    assert app.selected_item['name'] == 'Error'
+    assert app.controller.selected_item['type'] == 'category'
+    assert app.controller.selected_item['name'] == 'Error'
 
     # --- 4. Boundary Check (Top) ---
     # Pressing Up again should not change the selection.
     app.navigate_items(up_event)
     app.update_idletasks()
-    assert app.selected_item['name'] == 'Error'
+    assert app.controller.selected_item['name'] == 'Error'
 
     # --- 5. Navigate Down to First Rule ---
     app.navigate_items(down_event)
     app.update_idletasks()
-    assert app.selected_item['data']['code'] == 'E501'
+    assert app.controller.selected_item['data']['code'] == 'E501'
 
     # --- 6. Navigate Down to Next Category ---
     # Pressing Down from the last rule in a category should select the next category.
     app.navigate_items(down_event)
     app.update_idletasks()
-    assert app.selected_item['type'] == 'category'
-    assert app.selected_item['name'] == 'Pyflakes'
+    assert app.controller.selected_item['type'] == 'category'
+    assert app.controller.selected_item['name'] == 'Pyflakes'
 
 def test_pylint_configuration_workflow(app, tmp_path):
     """
@@ -182,7 +183,7 @@ disable = ["C0103"]
 
     # --- 2. Load the project and verify initial state ---
     # Patch `run_full_scan_worker` to prevent real scanning
-    with patch.object(app, '_run_full_scan_worker', return_value=None):
+    with patch.object(app.controller, 'run_full_scan_worker', return_value=None):
         app.select_directory(str(tmp_path))
     app.update_idletasks()
 
@@ -202,12 +203,12 @@ disable = ["C0103"]
 
     # The radio button should now be "default"
     assert pylint_rule_widget['radio_variable'].get() == "default"
-    assert "C0103" in app.staged_changes
+    assert "C0103" in app.controller.staged_changes
 
     # --- 4. Apply the changes ---
     # This should write the changes back to the pyproject.toml
     # Disable proposal window for tests to apply immediately
-    with patch.object(app, '_run_full_scan_worker', return_value=None):
+    with patch.object(app.controller, 'run_full_scan_worker', return_value=None):
         app.apply_changes(show_proposal_window=False)
     app.update_idletasks()
 
@@ -235,20 +236,20 @@ def test_apply_profile(app):
     
     # Check that changes are staged
     # Ruff: E select, F ignore (F401, F841 are under Pyflakes/F)
-    assert app.staged_changes.get("F401") == "ignore"
-    assert app.staged_changes.get("F841") == "ignore"
+    assert app.controller.staged_changes.get("F401") == "ignore"
+    assert app.controller.staged_changes.get("F841") == "ignore"
     # Pylint: C0103 ignore
-    assert app.staged_changes.get("C0103") == "ignore"
+    assert app.controller.staged_changes.get("C0103") == "ignore"
 
 def test_stage_category_change(app):
     """Tests that staging a change for a whole category works."""
     # Pyflakes has prefix 'F'
     app.stage_category_change("F", "select")
-    assert app.staged_changes["F"] == "select"
+    assert app.controller.staged_changes["F"] == "select"
     # Individual rules should be cleared from staged if category is changed
-    app.staged_changes["F401"] = "ignore"
+    app.controller.staged_changes["F401"] = "ignore"
     app.stage_category_change("F", "default")
-    assert "F401" not in app.staged_changes
+    assert "F401" not in app.controller.staged_changes
 
 @patch('ruff_studio.proposal_manager.create_proposal')
 def test_proposal_window_logic(mock_create, app):
@@ -262,7 +263,7 @@ def test_proposal_window_logic(mock_create, app):
     win.create_only()
     
     mock_create.assert_called_once_with(
-        app.analyzer.conn, "Test Proposal", "Some rationale",
+        app.controller.analyzer.conn, "Test Proposal", "Some rationale",
         "before", "after", {"impact": "low"}
     )
 
@@ -285,7 +286,7 @@ def test_proposals_dashboard(mock_get, mock_update, app):
     assert dash.detail_title.cget("text") == "P1"
     
     dash.approve()
-    mock_update.assert_called_once_with(app.analyzer.conn, "123", "approved")
+    mock_update.assert_called_once_with(app.controller.analyzer.conn, "123", "approved")
 
 @patch('ruff_studio.proposal_manager.update_proposal_status', return_value=True)
 @patch('ruff_studio.proposal_manager.get_proposals')
@@ -301,16 +302,16 @@ def test_proposals_dashboard_reject(mock_get, mock_update, app):
         dash = ProposalsDashboard(app)
         dash.current_proposal = mock_p
         dash.reject()
-        mock_update.assert_called_once_with(app.analyzer.conn, "1", "rejected")
+        mock_update.assert_called_once_with(app.controller.analyzer.conn, "1", "rejected")
 
 def test_select_directory_no_config(app, tmp_path):
     """Tests select_directory when no pyproject.toml exists."""
     with patch('customtkinter.filedialog.askdirectory', return_value=str(tmp_path)):
         with patch('os.path.exists', return_value=False):
-            with patch.object(app, 'run_in_thread'):
+            with patch.object(app.controller, 'run_in_thread'):
                 app.select_directory()
-                assert app.current_directory == str(tmp_path)
-                assert app.pyproject_path == os.path.join(str(tmp_path), "pyproject.toml")
+                assert app.controller.current_directory == str(tmp_path)
+                assert app.controller.pyproject_path == os.path.join(str(tmp_path), "pyproject.toml")
 
 def test_ui_initialization(app):
     """Tests that all expected UI components are created."""
@@ -368,57 +369,41 @@ def test_proposal_window_commit(mock_create, mock_clean, mock_branch, mock_commi
         mock_commit.assert_called_once()
         assert mock_create.call_count == 1
 
-@patch('ruff_studio.proposal_manager.update_proposal_status', return_value=True)
-@patch('ruff_studio.proposal_manager.get_proposals')
-def test_proposals_dashboard_reject(mock_get, mock_update, app):
-    """Tests rejecting a proposal from the dashboard."""
-    from ruff_studio.ui.dashboard_window import ProposalsDashboard
-    mock_p = {"id": "1", "title": "T", "status": "pending", "author": "A", 
-              "created_at": "N", "rationale": "R", "impact_simulation": "{}",
-              "config_before": "", "config_after": ""}
-    mock_get.return_value = [mock_p]
-    
-    with patch('tkinter.messagebox.showinfo'):
-        dash = ProposalsDashboard(app)
-        dash.current_proposal = mock_p
-        dash.reject()
-        mock_update.assert_called_once_with(app.analyzer.conn, "1", "rejected")
-
 def test_discover_rules_worker(app):
     """Tests that the discover_rules_worker puts results in the queue."""
     with patch('ruff_studio.ruff_adapter.discover_rules', return_value={"R": {}}):
         with patch('ruff_studio.pylint_adapter.discover_rules', return_value={"P": {}}):
-            app._discover_rules_worker("test_cmd")
-            command, data = app.queue.get()
-            assert command == "test_cmd"
+            app.controller.discover_rules_worker("discover_rules")
+            command, data = app.controller.queue.get()
+            assert command == "discover_rules"
             assert "R" in data
             assert "Pylint: P" in data
 
 def test_run_full_scan_worker(app):
     """Tests that the run_full_scan_worker puts results in the queue."""
-    with patch.object(app.analyzer, 'run_full_scan', return_value=["v1"]):
-        app._run_full_scan_worker("scan_cmd", "/dir")
-        command, data = app.queue.get()
-        assert command == "scan_cmd"
+    with patch.object(app.controller.analyzer, 'run_full_scan', return_value=["v1"]):
+        app.controller.run_full_scan_worker("run_full_scan", "/dir")
+        command, data = app.controller.queue.get()
+        assert command == "run_full_scan"
         assert data == ["v1"]
 
 def test_process_queue_discover(app):
     """Tests that process_queue correctly handles discover_rules command."""
     mock_data = {"CAT": {"prefix": "C", "rules": [{"code": "C01", "name": "N", "summary": "S", "fix": False, "status": "stable"}]}}
-    app.queue.put(("discover_rules", mock_data))
+    app.controller.queue.put(("discover_rules", mock_data))
     
     # process_queue calls populate_rules_initial
     app.process_queue()
     
-    assert app.all_rules == mock_data
+    assert app.controller.all_rules == mock_data
     assert "CAT" in app.rule_widgets
 
 def test_apply_changes_with_proposal(app, tmp_path):
     """Tests that apply_changes triggers ProposalWindow."""
     # Set attributes directly instead of calling select_directory
-    app.current_directory = str(tmp_path)
-    app.pyproject_path = str(tmp_path / "pyproject.toml")
-    app.pyproject_data = tomlkit.parse("test = true")
+    app.controller.current_directory = str(tmp_path)
+    app.controller.pyproject_path = str(tmp_path / "pyproject.toml")
+    app.controller.pyproject_data = tomlkit.parse("test = true")
     
     with patch('ruff_studio.ruff_adapter.run_scan_with_config', return_value=[]):
         with patch('ruff_studio.config_manager.read_pyproject_text', return_value=""):
@@ -428,9 +413,9 @@ def test_apply_changes_with_proposal(app, tmp_path):
 
 def test_apply_changes_direct(app, tmp_path):
     """Tests applying changes directly without proposal."""
-    app.current_directory = str(tmp_path)
-    app.pyproject_path = str(tmp_path / "pyproject.toml")
-    app.pyproject_data = tomlkit.parse("dummy = true")
+    app.controller.current_directory = str(tmp_path)
+    app.controller.pyproject_path = str(tmp_path / "pyproject.toml")
+    app.controller.pyproject_data = tomlkit.parse("dummy = true")
     
     with patch('ruff_studio.config_manager.write_pyproject') as mock_write:
         with patch('ruff_studio.config_manager.read_pyproject_text', return_value=""):
@@ -447,7 +432,7 @@ def test_open_windows(app):
 
 def test_generate_pre_commit(app, tmp_path):
     """Tests pre-commit configuration generation."""
-    app.current_directory = str(tmp_path)
+    app.controller.current_directory = str(tmp_path)
     with patch('ruff_studio.ruff_adapter.get_ruff_version', return_value="0.1.0"):
         with patch('ruff_studio.ci_integration.generate_pre_commit_config', return_value="yaml"):
             with patch('customtkinter.filedialog.asksaveasfilename', return_value=str(tmp_path/"pre.yaml")):
@@ -472,15 +457,39 @@ def test_update_results_panel(app):
     assert "Author: Dev" in violation_labels[0].cget("text")
 
 def test_show_rule_info_with_scrape(app):
-    """Tests that show_rule_info triggers doc scraping."""
+    """Tests that show_rule_info triggers doc scraping button."""
     rule = MOCK_RULES["Error"]["rules"][0].copy()
     rule["documentation"] = None # Force scrape
     
-    with patch('ruff_studio.ruff_adapter.scrape_rule_documentation', return_value="Scraped Docs"):
-        app.show_rule_info(rule, "Error")
+    # Initialize widget structure for this rule to avoid UI errors
+    app.rule_widgets["Error"] = {
+        'prefix': 'E',
+        'rules': {
+            'E501': {
+                'frame': MagicMock(),
+                'effective_state_variable': MagicMock(),
+                'radio_variable': MagicMock()
+            }
+        },
+        'category_frame': MagicMock()
+    }
+    
+    # Initialize selected_item to avoid NoneType error
+    app.controller.selected_item = {
+        'type': 'rule', 'data': rule, 'category_name': 'Error'
+    }
+    
+    app.show_rule_info(rule, "Error")
         
-    # Check if a textbox with docs was created
+    # Check if a button was created
     import customtkinter as ctk
-    textboxes = [w for w in app.info_frame.winfo_children() if isinstance(w, ctk.CTkTextbox)]
-    assert len(textboxes) == 1
-    assert textboxes[0].get("1.0", "end").strip() == "Scraped Docs"
+    buttons = [
+        w for w in app.info_frame.winfo_children() 
+        if isinstance(w, ctk.CTkButton) and "Fetch" in w.cget("text")
+    ]
+    assert len(buttons) == 1
+    
+    # Trigger fetch
+    with patch.object(app.controller, 'run_in_thread') as mock_run:
+        buttons[0].invoke()
+        mock_run.assert_called_once()
