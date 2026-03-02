@@ -6,7 +6,7 @@ import uuid
 import json
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 
 def create_proposal(
     conn, title, rationale, config_before, config_after, 
@@ -61,9 +61,10 @@ def update_proposal_status(conn, proposal_id, status, user="User"):
     try:
         cursor = conn.cursor()
         if status == "implemented":
+            now_iso = datetime.now(timezone.utc).isoformat()
             cursor.execute("""
                 UPDATE proposals SET status = ?, implemented_at = ? WHERE id = ?
-            """, (status, datetime.now().isoformat(), proposal_id))
+            """, (status, now_iso, proposal_id))
         else:
             cursor.execute("""
                 UPDATE proposals SET status = ? WHERE id = ?
@@ -81,10 +82,11 @@ def log_event(conn, event_type, user, details):
     """Logs an event to the audit_log table."""
     try:
         cursor = conn.cursor()
+        now_iso = datetime.now(timezone.utc).isoformat()
         cursor.execute("""
-            INSERT INTO audit_log (id, event_type, user, details)
-            VALUES (?, ?, ?, ?)
-        """, (str(uuid.uuid4()), event_type, user, json.dumps(details)))
+            INSERT INTO audit_log (id, event_type, timestamp, user, details)
+            VALUES (?, ?, ?, ?, ?)
+        """, (str(uuid.uuid4()), event_type, now_iso, user, json.dumps(details)))
         # Note: No commit here as it's usually called within another transaction
     except sqlite3.Error as e:
         logging.error(f"Error logging event: {e}")

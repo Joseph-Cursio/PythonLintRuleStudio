@@ -22,7 +22,7 @@ def create_tables(conn):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS scan_runs (
                 id TEXT PRIMARY KEY,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
                 directory TEXT NOT NULL,
                 branch TEXT,
                 total_violations INTEGER,
@@ -38,7 +38,7 @@ def create_tables(conn):
                 line_number INTEGER,
                 column INTEGER,
                 message TEXT,
-                timestamp DATETIME,
+                timestamp TEXT,
                 author TEXT,
                 commit_hash TEXT,
                 FOREIGN KEY (run_id) REFERENCES scan_runs(id)
@@ -51,12 +51,12 @@ def create_tables(conn):
                 type TEXT,
                 rationale TEXT,
                 author TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
                 status TEXT DEFAULT 'pending',
                 impact_simulation TEXT,
                 config_before TEXT,
                 config_after TEXT,
-                implemented_at DATETIME,
+                implemented_at TEXT,
                 branch_name TEXT
             );
         """)
@@ -64,7 +64,7 @@ def create_tables(conn):
             CREATE TABLE IF NOT EXISTS audit_log (
                 id TEXT PRIMARY KEY,
                 event_type TEXT NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
                 user TEXT,
                 details TEXT
             );

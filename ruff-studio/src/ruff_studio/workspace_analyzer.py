@@ -23,8 +23,10 @@ class UnifiedViolationModel:
     message: str
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     run_id: str = None
-    timestamp: datetime.datetime = field(
-        default_factory=datetime.datetime.utcnow
+    timestamp: str = field(
+        default_factory=lambda: datetime.datetime.now(
+            datetime.timezone.utc
+        ).isoformat()
     )
     author: str = None
     commit_hash: str = None
@@ -56,6 +58,7 @@ class WorkspaceAnalyzer:
     def _create_scan_run(self, conn, directory, branch, count, config):
         """Creates a new record in scan_runs."""
         run_id = str(uuid.uuid4())
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         try:
             cursor = conn.cursor()
             cursor.execute("""
@@ -65,7 +68,7 @@ class WorkspaceAnalyzer:
                 )
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (
-                run_id, datetime.datetime.utcnow(), directory, 
+                run_id, now_iso, directory, 
                 branch, count, json.dumps(config)
             ))
             conn.commit()
