@@ -7,7 +7,7 @@ class RulesPanel(ctk.CTkFrame):
         super().__init__(master, **kwargs)
         self.master = master
         self.controller = controller
-        self.test_mode = getattr(master, 'headless', False)
+        self.test_mode = getattr(master, "headless", False)
 
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -16,13 +16,13 @@ class RulesPanel(ctk.CTkFrame):
         self.search_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.search_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
         self.search_frame.grid_columnconfigure(0, weight=1)
-        
+
         self.search_entry = ctk.CTkEntry(
             self.search_frame, placeholder_text="Search rules (code or name)..."
         )
         self.search_entry.grid(row=0, column=0, sticky="ew")
         self.search_entry.bind("<KeyRelease>", self._on_search_change)
-        
+
         self.clear_search_btn = ctk.CTkButton(
             self.search_frame, text="X", width=30, command=self.clear_search
         )
@@ -68,32 +68,34 @@ class RulesPanel(ctk.CTkFrame):
     def filter_rules(self, query):
         query = query.lower()
         for cat_name, cat_widgets in self.rule_widgets.items():
-            cat_match = query in cat_name.lower() or query in cat_widgets['prefix'].lower()
-            
+            cat_match = (
+                query in cat_name.lower() or query in cat_widgets["prefix"].lower()
+            )
+
             any_rule_visible = False
-            for rule_code, r_widget in cat_widgets['rules'].items():
-                rule_name = r_widget['raw_rule']['name'].lower()
+            for rule_code, r_widget in cat_widgets["rules"].items():
+                rule_name = r_widget["raw_rule"]["name"].lower()
                 rule_match = query in rule_code.lower() or query in rule_name
-                
+
                 if cat_match or rule_match:
-                    r_widget['frame'].pack(fill="x", pady=1)
+                    r_widget["frame"].pack(fill="x", pady=1)
                     any_rule_visible = True
                 else:
-                    r_widget['frame'].pack_forget()
-            
+                    r_widget["frame"].pack_forget()
+
             if any_rule_visible or (not query):
-                cat_widgets['category_frame'].pack(fill="x", pady=(5, 1), padx=5)
+                cat_widgets["category_frame"].pack(fill="x", pady=(5, 1), padx=5)
                 # If we are searching, we should probably expand the category
-                if query and not cat_widgets['is_expanded']:
-                    cat_widgets['rules_container'].pack(fill="x", padx=(25, 5))
-                elif not query and not cat_widgets['is_expanded']:
-                    cat_widgets['rules_container'].pack_forget()
+                if query and not cat_widgets["is_expanded"]:
+                    cat_widgets["rules_container"].pack(fill="x", padx=(25, 5))
+                elif not query and not cat_widgets["is_expanded"]:
+                    cat_widgets["rules_container"].pack_forget()
                 else:
-                    cat_widgets['rules_container'].pack(fill="x", padx=(25, 5))
+                    cat_widgets["rules_container"].pack(fill="x", padx=(25, 5))
             else:
-                cat_widgets['category_frame'].pack_forget()
-                cat_widgets['rules_container'].pack_forget()
-        
+                cat_widgets["category_frame"].pack_forget()
+                cat_widgets["rules_container"].pack_forget()
+
         self.rebuild_navigable_items()
 
     def populate(self, categories):
@@ -149,7 +151,8 @@ class RulesPanel(ctk.CTkFrame):
                 ).grid(row=0, column=i)
 
             cat_title = f"{category_name} ({category_data['prefix']})"
-            ctk.CTkLabel(cat_frame, text=cat_title, anchor="w").grid(
+            color = self.controller.get_color_for_prefix(category_data["prefix"])
+            ctk.CTkLabel(cat_frame, text=cat_title, anchor="w", text_color=color).grid(
                 row=0, column=3, sticky="w", padx=10
             )
 
@@ -205,8 +208,12 @@ class RulesPanel(ctk.CTkFrame):
                     f" (⚠️ {rule['status']})" if rule["status"] != "stable" else ""
                 )
                 r_text = f"{rule['code']}{status_tag}"
+                color = self.controller.get_color_for_prefix(rule["code"])
                 lbl = ctk.CTkLabel(
-                    r_frame, text=f"{r_text}: {rule['name']}", anchor="w"
+                    r_frame,
+                    text=f"{r_text}: {rule['name']}",
+                    anchor="w",
+                    text_color=color,
                 )
                 lbl.grid(row=0, column=3, sticky="w", padx=10)
                 if rule["status"] != "stable":
@@ -222,7 +229,7 @@ class RulesPanel(ctk.CTkFrame):
                     "effective_state_variable": r_eff_var,
                     "radio_variable": r_radio_var,
                     "frame": r_frame,
-                    "raw_rule": rule
+                    "raw_rule": rule,
                 }
         self.rebuild_navigable_items()
 
@@ -231,9 +238,12 @@ class RulesPanel(ctk.CTkFrame):
         self.controller.navigable_items = []
         # Categories are processed in the order they were added to rule_widgets
         for cat_name, cat_widgets in self.rule_widgets.items():
-            if not self.test_mode and not cat_widgets['category_frame'].winfo_ismapped():
+            if (
+                not self.test_mode
+                and not cat_widgets["category_frame"].winfo_ismapped()
+            ):
                 continue
-                
+
             category_item = {
                 "type": "category",
                 "name": cat_name,
@@ -242,15 +252,20 @@ class RulesPanel(ctk.CTkFrame):
             self.controller.navigable_items.append(category_item)
 
             # Only add rules if the category is expanded AND rules container is mapped
-            is_visible = self.test_mode or cat_widgets['rules_container'].winfo_ismapped()
+            is_visible = (
+                self.test_mode or cat_widgets["rules_container"].winfo_ismapped()
+            )
             if cat_widgets["is_expanded"] and is_visible:
                 sorted_rules = sorted(
                     cat_widgets["raw_data"]["rules"], key=lambda r: r["code"]
                 )
                 for rule in sorted_rules:
-                    r_code = rule['code']
+                    r_code = rule["code"]
                     # Only add if the rule widget itself is visible (for filtering)
-                    if self.test_mode or cat_widgets['rules'][r_code]['frame'].winfo_ismapped():
+                    if (
+                        self.test_mode
+                        or cat_widgets["rules"][r_code]["frame"].winfo_ismapped()
+                    ):
                         rule_item = {
                             "type": "rule",
                             "data": rule,

@@ -149,6 +149,23 @@ class StudioController:
         # or the Pylint names. A simple check for the prefix:
         return any(code.startswith(p) for p in ["C", "R", "W", "I"]) or len(code) > 5
 
+    def get_color_for_prefix(self, prefix):
+        """Returns a color hex code based on rule severity/type."""
+        prefix = prefix.upper()
+        # Reddish for Errors/Pyflakes/Bugbear
+        if any(prefix.startswith(p) for p in ["E", "F", "B", "ERR"]):
+            return ("#f44336", "#ef5350")
+        # Amber for Warnings/Annotations
+        if any(prefix.startswith(p) for p in ["W", "ANN", "WARN"]):
+            return ("#ff9800", "#ffb74d")
+        # Blue for Conventions/Pylint Convention/Refactor
+        if any(prefix.startswith(p) for p in ["C", "PL", "CONV", "R"]):
+            return ("#2196f3", "#64b5f6")
+        # Green for Style/Imports/Naming/Performance
+        if any(prefix.startswith(p) for p in ["I", "D", "N", "PERF", "S"]):
+            return ("#4caf50", "#81c784")
+        return ("#9e9e9e", "#bdbdbd")  # Gray for others
+
     def get_explicit_rule_state(self, code, ruff_config, pylint_config=None):
         """Determines if a rule is explicitly select/ignore/default."""
         if self.is_pylint_rule(code):
