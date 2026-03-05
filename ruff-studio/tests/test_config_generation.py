@@ -1,18 +1,41 @@
 import unittest
+from unittest.mock import patch, MagicMock
 import tomlkit
 from ruff_studio.main import App
 
-
 class TestConfigGeneration(unittest.TestCase):
     def setUp(self):
-        # Mock the App class to isolate the get_effective_configs method
+        # Global mocks to prevent Tcl/Tk initialization or blocking dialogs
+        self.patchers = [
+            patch("customtkinter.CTk", return_value=MagicMock()),
+            patch("customtkinter.CTkFrame", return_value=MagicMock()),
+            patch("customtkinter.CTkScrollableFrame", return_value=MagicMock()),
+            patch("customtkinter.CTkButton", return_value=MagicMock()),
+            patch("customtkinter.CTkLabel", return_value=MagicMock()),
+            patch("customtkinter.CTkEntry", return_value=MagicMock()),
+            patch("customtkinter.CTkTextbox", return_value=MagicMock()),
+            patch("customtkinter.CTkFont", return_value=MagicMock()),
+            patch("customtkinter.StringVar", return_value=MagicMock()),
+            patch("customtkinter.set_appearance_mode", MagicMock()),
+            patch("customtkinter.set_default_color_theme", MagicMock()),
+            patch("ruff_studio.main.messagebox", MagicMock()),
+            patch("ruff_studio.main.filedialog", MagicMock()),
+            patch("ruff_studio.main.App.run_in_thread", return_value=None),
+        ]
+        for p in self.patchers:
+            p.start()
+
         self.app = App(headless=True)
         self.app.controller.pyproject_data = tomlkit.document()
         self.app.controller.all_rules = {
             "pyflakes": {"prefix": "F", "rules": [{"code": "F401"}]},
             "pycodestyle": {"prefix": "E", "rules": [{"code": "E501"}]},
-            "Pylint: Convention": {"prefix": "C", "rules": [{"code": "C0103"}]},
+            "Pylint: Convention": {"prefix": "C", "is_pylint": True, "rules": [{"code": "C0103"}]},
         }
+
+    def tearDown(self):
+        for p in self.patchers:
+            p.stop()
 
     def test_select_category(self):
         self.app.controller.staged_changes = {"F": "select"}
@@ -55,7 +78,6 @@ class TestConfigGeneration(unittest.TestCase):
         _, pylint_config = self.app.controller.get_effective_configs()
         self.assertEqual(pylint_config["disable"], ["C0103"])
         self.assertNotIn("enable", pylint_config)
-
 
 if __name__ == "__main__":
     unittest.main()
