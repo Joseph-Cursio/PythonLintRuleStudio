@@ -1,6 +1,7 @@
 """
 Manages caching for data that is expensive to compute, like rule discovery.
 """
+
 import json
 from pathlib import Path
 
@@ -8,9 +9,11 @@ from pathlib import Path
 CACHE_DIR = Path.home() / ".ruff_studio" / "cache"
 CACHE_FILE = CACHE_DIR / "rule_cache.json"
 
+
 def _ensure_cache_dir_exists():
     """Creates the cache directory if it doesn't exist."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def _read_cache_file():
     """Reads the entire cache file into a dictionary."""
@@ -23,6 +26,7 @@ def _read_cache_file():
     except (json.JSONDecodeError, IOError):
         return {}
 
+
 def _write_cache_file(data):
     """Writes a dictionary to the cache file."""
     _ensure_cache_dir_exists()
@@ -32,6 +36,7 @@ def _write_cache_file(data):
     except IOError:
         # If writing fails, we don't want to crash the app
         pass
+
 
 def get_cache(key):
     """
@@ -45,6 +50,7 @@ def get_cache(key):
     """
     cache_data = _read_cache_file()
     return cache_data.get(key)
+
 
 def set_cache(key, value):
     """

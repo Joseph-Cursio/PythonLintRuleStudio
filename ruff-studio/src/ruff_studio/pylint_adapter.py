@@ -1,12 +1,14 @@
 """
 Adapter for running pylint and parsing its output.
 """
+
 import subprocess
 import json
 import sys
 import logging
 import re
 from . import cache_manager
+
 
 def get_pylint_version():
     """
@@ -27,6 +29,7 @@ def get_pylint_version():
         return None
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None
+
 
 def discover_rules():
     """
@@ -64,14 +67,16 @@ def discover_rules():
             category_prefix = rule["msgid"][0]
             for cat_name, cat_data in categories.items():
                 if cat_data["prefix"] == category_prefix:
-                    categories[cat_name]["rules"].append({
-                        "code": rule["msgid"],
-                        "name": rule["symbol"],
-                        "summary": rule["msg"],
-                        "fix": "no",
-                        "status": "stable",
-                        "documentation": rule.get("description", "")
-                    })
+                    categories[cat_name]["rules"].append(
+                        {
+                            "code": rule["msgid"],
+                            "name": rule["symbol"],
+                            "summary": rule["msg"],
+                            "fix": "no",
+                            "status": "stable",
+                            "documentation": rule.get("description", ""),
+                        }
+                    )
                     break
 
         categorized_rules = {
@@ -86,7 +91,9 @@ def discover_rules():
         return categorized_rules
 
     except (
-        subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        json.JSONDecodeError,
     ) as e:
         logging.error(f"Failed to discover pylint rules: {e}")
         return {}

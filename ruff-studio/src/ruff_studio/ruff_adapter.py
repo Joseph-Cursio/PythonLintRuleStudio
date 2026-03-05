@@ -9,6 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 from . import cache_manager
 
+
 def _run_ruff_command(args):
     """Utility to run a ruff command and handle common errors."""
     is_check_command = "check" in args
@@ -19,11 +20,11 @@ def _run_ruff_command(args):
             capture_output=True,
             text=True,
             check=not is_check_command,  # Don't raise for 'check' command
-            encoding='utf-8'
+            encoding="utf-8",
         )
         # For check command, a non-zero exit code can mean violations were found
         if is_check_command and process.returncode != 0 and process.stdout:
-             return process.stdout
+            return process.stdout
 
         # If check is True and command failed, CalledProcessError would have been raised
         if process.returncode == 0:
@@ -89,6 +90,7 @@ def scrape_rule_documentation(rule_name):
         logging.warning(f"Could not fetch documentation for rule {rule_name}: {e}")
         return None
 
+
 def discover_rules():
     """
     Discovers and categorizes all ruff rules, using a cache to speed up
@@ -112,7 +114,7 @@ def discover_rules():
     for i, rule_data in enumerate(all_rules_raw):
         logging.info(
             f"Processing ruff rule '{rule_data['name']}' "
-            f"({i+1}/{len(all_rules_raw)})..."
+            f"({i + 1}/{len(all_rules_raw)})..."
         )
         # Add status field
         if rule_data.get("deprecated"):
@@ -126,7 +128,7 @@ def discover_rules():
 
         # Documentation scraping is removed for performance.
         # This could be added back as a background process or on-demand.
-        rule_data['documentation'] = None
+        rule_data["documentation"] = None
 
         category_name = rule_data.get("linter", "Unknown")
         if category_name not in categorized_rules:
@@ -142,17 +144,23 @@ def discover_rules():
 
     return categorized_rules
 
+
 def run_scan(directory):
     """Runs a ruff scan on the given directory and returns the results as JSON."""
     try:
         ruff_args = [
-            "check", directory, "--output-format", "json",
-            "--force-exclude", "--no-respect-gitignore"
+            "check",
+            directory,
+            "--output-format",
+            "json",
+            "--force-exclude",
+            "--no-respect-gitignore",
         ]
         output = _run_ruff_command(ruff_args)
         return json.loads(output)
     except (RuntimeError, json.JSONDecodeError):
         return []
+
 
 def run_scan_with_config(directory, config_data):
     """Runs a ruff scan with a temporary configuration."""
@@ -166,19 +174,24 @@ def run_scan_with_config(directory, config_data):
         temp_config_path = temp_config.name
 
     try:
-        output = _run_ruff_command([
-            "check",
-            directory,
-            "--output-format", "json",
-            "--force-exclude",
-            "--no-respect-gitignore",
-            "--config", temp_config_path
-        ])
+        output = _run_ruff_command(
+            [
+                "check",
+                directory,
+                "--output-format",
+                "json",
+                "--force-exclude",
+                "--no-respect-gitignore",
+                "--config",
+                temp_config_path,
+            ]
+        )
         return json.loads(output)
     except (RuntimeError, json.JSONDecodeError):
         return []
     finally:
         os.unlink(temp_config_path)
+
 
 def get_default_rules():
     """
@@ -194,8 +207,7 @@ def get_default_rules():
 
             # Use regex to find the linter.rules.enabled list
             match = re.search(
-                r"linter\.rules\.enabled = \[\s*([^]]+?)\s*\]", 
-                output, re.DOTALL
+                r"linter\.rules\.enabled = \[\s*([^]]+?)\s*\]", output, re.DOTALL
             )
             if not match:
                 return set()

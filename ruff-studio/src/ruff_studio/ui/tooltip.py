@@ -1,5 +1,6 @@
 import customtkinter as ctk
 
+
 class Tooltip:
     def __init__(self, widget, text):
         self.widget = widget
@@ -17,9 +18,14 @@ class Tooltip:
         tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x}+{y}")
         label = ctk.CTkLabel(
-            tw, text=self.text, justify="left",
-            fg_color="#FFFFE1", text_color="black",
-            corner_radius=4, padx=5, pady=2
+            tw,
+            text=self.text,
+            justify="left",
+            fg_color="#FFFFE1",
+            text_color="black",
+            corner_radius=4,
+            padx=5,
+            pady=2,
         )
         label.pack()
 

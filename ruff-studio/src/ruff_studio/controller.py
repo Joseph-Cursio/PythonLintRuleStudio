@@ -2,42 +2,41 @@ import os
 import queue
 import threading
 import logging
-from . import (
-    ruff_adapter, pylint_adapter, config_manager, 
-    workspace_analyzer
-)
+from . import ruff_adapter, pylint_adapter, config_manager, workspace_analyzer
+
 
 class StudioController:
     """
     Handles application state and coordination between the UI and backend logic.
     """
+
     def __init__(self, db_path="ruff_studio.db"):
         self.current_directory = None
         self.pyproject_path = None
         self.pyproject_data = None
-        
+
         self.enabled_rules = set()
         self.all_rules = {}
         self.staged_changes = {}
         self.base_scan_results = []
-        
+
         self.navigable_items = []
         self.navigable_index = 0
         self.selected_item = None
-        
+
         self.analyzer = workspace_analyzer.WorkspaceAnalyzer(db_path)
         self.queue = queue.Queue()
-        
+
         # Callbacks for UI updates
-        self.on_state_changed = None # Called when major state changes
-        self.on_scan_finished = None # Called when a scan result is ready
+        self.on_state_changed = None  # Called when major state changes
+        self.on_scan_finished = None  # Called when a scan result is ready
 
     def set_directory(self, directory):
         """Sets the active directory and initializes path data."""
         self.current_directory = directory
         self.pyproject_path = os.path.join(directory, "pyproject.toml")
         self.staged_changes = {}
-        
+
         if os.path.exists(self.pyproject_path):
             try:
                 self.pyproject_data = config_manager.read_pyproject(self.pyproject_path)
@@ -49,9 +48,7 @@ class StudioController:
 
     def run_in_thread(self, func, command, *args):
         """Helper to run a function in a background thread."""
-        thread = threading.Thread(
-            target=func, args=(command, *args), daemon=True
-        )
+        thread = threading.Thread(target=func, args=(command, *args), daemon=True)
         thread.start()
 
     def discover_rules_worker(self, command):
@@ -75,8 +72,7 @@ class StudioController:
         try:
             ruff_cfg, pylint_cfg = self.get_effective_configs()
             results = self.analyzer.run_full_scan(
-                directory,
-                config={"ruff": ruff_cfg, "pylint": pylint_cfg}
+                directory, config={"ruff": ruff_cfg, "pylint": pylint_cfg}
             )
             self.queue.put((command, results))
         except Exception as e:
@@ -94,7 +90,6 @@ class StudioController:
 
     def get_violation_trend(self):
         return self.analyzer.get_total_violations_trend()
-
 
     def get_effective_configs(self):
         """Calculates final ruff/pylint configs based on staged changes."""
@@ -122,7 +117,7 @@ class StudioController:
                 elif state == "default":
                     pylint_disable.discard(code)
                     pylint_enable.discard(code)
-            else: # Ruff
+            else:  # Ruff
                 if state == "select":
                     ruff_select.add(code)
                     ruff_ignore.discard(code)
@@ -135,7 +130,7 @@ class StudioController:
 
         ruff_config["select"] = sorted(list(ruff_select))
         ruff_config["ignore"] = sorted(list(ruff_ignore))
-        
+
         if pylint_disable:
             pylint_config["disable"] = sorted(list(pylint_disable))
         elif "disable" in pylint_config:
@@ -145,12 +140,12 @@ class StudioController:
             pylint_config["enable"] = sorted(list(pylint_enable))
         elif "enable" in pylint_config:
             del pylint_config["enable"]
-        
+
         return ruff_config, pylint_config
 
     def is_pylint_rule(self, code):
         """Helper to distinguish rule origins."""
-        # Pylint rules in our model are either C, R, W, E, F (one char) 
+        # Pylint rules in our model are either C, R, W, E, F (one char)
         # or the Pylint names. A simple check for the prefix:
         return any(code.startswith(p) for p in ["C", "R", "W", "I"]) or len(code) > 5
 
@@ -189,7 +184,7 @@ class StudioController:
         # Fallback to current saved config
         ruff_config = config_manager.get_ruff_config(self.pyproject_data)
         pylint_config = config_manager.get_pylint_config(self.pyproject_data)
-        
+
         if self.is_pylint_rule(rule_code):
             # Pylint is default-on
             return rule_code not in pylint_config.get("disable", [])
@@ -203,7 +198,18 @@ class StudioController:
         select = ruff_config.get("select", [])
         ignore = ruff_config.get("ignore", [])
         enabled = set()
-        for code in select:
-            if not any(code.startswith(i) for i in ignore):
-                enabled.add(code)
+
+        # We need to iterate over all known rules to see which ones match
+        for category_data in self.all_rules.values():
+            if category_data.get("is_pylint"):
+                continue
+            for rule in category_data["rules"]:
+                rc = rule["code"]
+                # Rule is enabled if it matches a select prefix AND
+                # doesn't match a more specific ignore prefix
+                is_selected = any(rc.startswith(s) for i, s in enumerate(select))
+                is_ignored = any(rc.startswith(ig) for i, ig in enumerate(ignore))
+
+                if is_selected and not is_ignored:
+                    enabled.add(rc)
         return enabled

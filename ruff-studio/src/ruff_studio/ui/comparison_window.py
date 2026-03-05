@@ -1,6 +1,7 @@
 import customtkinter as ctk
 from .. import profile_manager
 
+
 class ProfileComparisonWindow(ctk.CTkToplevel):
     def __init__(self, master):
         super().__init__(master)
@@ -44,8 +45,7 @@ class ProfileComparisonWindow(ctk.CTkToplevel):
         self.results_textbox = ctk.CTkTextbox(self, wrap="word")
         self.results_textbox.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
         self.results_textbox.insert(
-            "1.0", 
-            "Select two profiles and click 'Compare' to see the differences."
+            "1.0", "Select two profiles and click 'Compare' to see the differences."
         )
         self.results_textbox.configure(state="disabled")
 

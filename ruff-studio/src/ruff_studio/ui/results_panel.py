@@ -1,11 +1,12 @@
 import customtkinter as ctk
 
+
 class ResultsPanel(ctk.CTkScrollableFrame):
     def __init__(self, master, controller, **kwargs):
         super().__init__(master, **kwargs)
         self.master = master
         self.controller = controller
-        
+
         self.results_label = ctk.CTkLabel(
             self, text="Scan Results", font=("", 16, "bold")
         )
@@ -21,7 +22,7 @@ class ResultsPanel(ctk.CTkScrollableFrame):
         self._parent_canvas.yview_moveto(0)
         count = len(results)
         self.results_label.configure(text=f"Scan Results ({count})")
-        
+
         if not results:
             ctk.CTkLabel(self, text="No violations found!").pack(pady=20)
             return
@@ -34,16 +35,18 @@ class ResultsPanel(ctk.CTkScrollableFrame):
                 f"  {result.message}"
             )
             ctk.CTkLabel(
-                self, text=result_text,
-                wraplength=self.winfo_width()-50, justify="left",
-                anchor="w"
+                self,
+                text=result_text,
+                wraplength=self.winfo_width() - 50,
+                justify="left",
+                anchor="w",
             ).pack(pady=2, fill="x", padx=5)
 
     def set_simulation_results(self, sim_results):
         self.clear()
         self._parent_canvas.yview_moveto(0)
         self.results_label.configure(text="Simulation Results")
-        
+
         if not sim_results:
             ctk.CTkLabel(self, text="Dry-run: No violations found!").pack(pady=20)
             return
@@ -55,11 +58,13 @@ class ResultsPanel(ctk.CTkScrollableFrame):
                 f"  {result['message']}"
             )
             ctk.CTkLabel(
-                self, text=result_text,
-                wraplength=self.winfo_width()-50, justify="left",
-                anchor="w"
+                self,
+                text=result_text,
+                wraplength=self.winfo_width() - 50,
+                justify="left",
+                anchor="w",
             ).pack(pady=2, fill="x", padx=5)
-            
+
     def set_scanning(self):
         self.clear()
         self.results_label.configure(text="Scanning...")

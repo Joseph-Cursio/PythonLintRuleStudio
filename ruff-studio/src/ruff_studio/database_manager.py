@@ -2,8 +2,10 @@
 This module handles all database operations for Ruff Studio, including
 creating the database and tables, and storing violation data.
 """
+
 import sqlite3
 import logging
+
 
 def create_connection(db_file):
     """Create a database connection to the SQLite database."""
@@ -14,6 +16,7 @@ def create_connection(db_file):
     except sqlite3.Error as e:
         logging.error(f"Error connecting to SQLite database: {e}")
     return conn
+
 
 def create_tables(conn):
     """Create the necessary tables if they don't exist."""
@@ -73,6 +76,7 @@ def create_tables(conn):
         logging.info("All required tables created or already exist.")
     except sqlite3.Error as e:
         logging.error(f"Error creating tables: {e}")
+
 
 def setup_database(db_file):
     """Setup the database: create connection and tables."""

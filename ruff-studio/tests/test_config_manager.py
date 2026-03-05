@@ -2,6 +2,7 @@ import unittest
 from ruff_studio.config_manager import read_pyproject, write_pyproject
 import os
 
+
 class TestConfigManager(unittest.TestCase):
     def setUp(self):
         self.test_toml_path = "test_pyproject.toml"
@@ -49,5 +50,6 @@ line-length = 88
         self.assertIn("# version comment", new_content)
         self.assertIn("# another comment", new_content)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,7 @@ import subprocess
 import requests
 from ruff_studio import ruff_adapter
 
+
 class TestRuffAdapter(unittest.TestCase):
     def setUp(self):
         self.test_py_file = "test_file.py"
@@ -28,7 +29,7 @@ class TestRuffAdapter(unittest.TestCase):
         mock_run.side_effect = FileNotFoundError()
         with self.assertRaises(FileNotFoundError):
             ruff_adapter._run_ruff_command(["--version"])
-        
+
         # CalledProcessError (for non-check commands)
         mock_run.side_effect = subprocess.CalledProcessError(1, "ruff", stderr=b"error")
         with self.assertRaises(RuntimeError):
@@ -45,16 +46,16 @@ class TestRuffAdapter(unittest.TestCase):
         mock_response = MagicMock()
         mock_response.content = (
             b'<article class="md-content__inner">'
-            b'<h2>What it does</h2><p>Rule desc</p></article>'
+            b"<h2>What it does</h2><p>Rule desc</p></article>"
         )
         mock_response.status_code = 200
         mock_response.raise_for_status.return_value = None
         mock_get.return_value = mock_response
-        
+
         doc = ruff_adapter.scrape_rule_documentation("F401")
         self.assertIn("WHAT IT DOES", doc)
         self.assertIn("Rule desc", doc)
-        
+
         # Failure
         mock_get.side_effect = requests.RequestException("Network error")
         self.assertIsNone(ruff_adapter.scrape_rule_documentation("F401"))
@@ -64,12 +65,16 @@ class TestRuffAdapter(unittest.TestCase):
     @patch("ruff_studio.ruff_adapter.get_ruff_version")
     def test_discover_rules_fresh(self, mock_version, mock_run_ruff, mock_cache):
         mock_version.return_value = "0.1.0"
-        mock_run_ruff.return_value = json.dumps([
-            {
-                "name": "Unused import", "code": "F401",
-                "linter": "pyflakes", "deprecated": False
-            }
-        ])
+        mock_run_ruff.return_value = json.dumps(
+            [
+                {
+                    "name": "Unused import",
+                    "code": "F401",
+                    "linter": "pyflakes",
+                    "deprecated": False,
+                }
+            ]
+        )
         mock_cache.get_cache.return_value = None
 
         rules = ruff_adapter.discover_rules()
@@ -82,9 +87,9 @@ class TestRuffAdapter(unittest.TestCase):
         mock_version.return_value = "0.1.0"
         mock_cache.get_cache.return_value = {
             "version": "0.1.0",
-            "rules": {"pyflakes": {"prefix": "F", "rules": []}}
+            "rules": {"pyflakes": {"prefix": "F", "rules": []}},
         }
-        
+
         rules = ruff_adapter.discover_rules()
         self.assertIn("pyflakes", rules)
 
@@ -93,7 +98,7 @@ class TestRuffAdapter(unittest.TestCase):
         mock_run_ruff.return_value = "[]"
         results = ruff_adapter.run_scan("/some/dir")
         self.assertEqual(results, [])
-        
+
         mock_run_ruff.side_effect = RuntimeError("error")
         self.assertEqual(ruff_adapter.run_scan("/some/dir"), [])
 
@@ -107,19 +112,12 @@ class TestRuffAdapter(unittest.TestCase):
     @patch("subprocess.run")
     def test_run_ruff_command_check_logic(self, mock_run):
         # check command with violations (non-zero exit code but has stdout)
-        mock_run.return_value = MagicMock(
-            stdout='[{"code": "E501"}]', 
-            returncode=1
-        )
+        mock_run.return_value = MagicMock(stdout='[{"code": "E501"}]', returncode=1)
         output = ruff_adapter._run_ruff_command(["check", "file.py"])
         self.assertEqual(output, '[{"code": "E501"}]')
-        
+
         # check command with real failure (no stdout)
-        mock_run.return_value = MagicMock(
-            stdout='', 
-            stderr='fatal error',
-            returncode=2
-        )
+        mock_run.return_value = MagicMock(stdout="", stderr="fatal error", returncode=2)
         with self.assertRaises(RuntimeError):
             ruff_adapter._run_ruff_command(["check", "file.py"])
 
@@ -128,14 +126,15 @@ class TestRuffAdapter(unittest.TestCase):
         # Match case
         mock_run_ruff.return_value = "linter.rules.enabled = [F401, E501]"
         self.assertEqual(ruff_adapter.get_default_rules(), {"F401", "E501"})
-        
+
         # No match case
         mock_run_ruff.return_value = "no match"
         self.assertEqual(ruff_adapter.get_default_rules(), set())
-        
+
         # Error case
         mock_run_ruff.side_effect = RuntimeError("error")
         self.assertEqual(ruff_adapter.get_default_rules(), set())
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

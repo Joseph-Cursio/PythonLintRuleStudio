@@ -2,6 +2,7 @@ import unittest
 import os
 from ruff_studio.ruff_adapter import run_scan_with_config
 
+
 class TestRuffAdapterSimulation(unittest.TestCase):
     def setUp(self):
         self.test_py_file = "test_simulation_file.py"
@@ -15,11 +16,7 @@ class TestRuffAdapterSimulation(unittest.TestCase):
 
     def test_run_scan_with_config_selects_rule(self):
         # This config enables F401 ("unused-import")
-        config = {
-            "lint": {
-                "select": ["F401"]
-            }
-        }
+        config = {"lint": {"select": ["F401"]}}
         results = run_scan_with_config(self.test_py_file, config)
         self.assertIsInstance(results, list)
         self.assertGreater(len(results), 0)
@@ -29,13 +26,14 @@ class TestRuffAdapterSimulation(unittest.TestCase):
         # This config ignores F401, so no results should be returned
         config = {
             "lint": {
-                "select": ["F"], # Select all F rules
-                "ignore": ["F401"] # But ignore unused-import
+                "select": ["F"],  # Select all F rules
+                "ignore": ["F401"],  # But ignore unused-import
             }
         }
         results = run_scan_with_config(self.test_py_file, config)
         self.assertIsInstance(results, list)
         self.assertEqual(len(results), 0)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

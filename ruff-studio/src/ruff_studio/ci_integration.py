@@ -1,7 +1,9 @@
 """
 Handles the generation of CI/CD and pre-commit configurations.
 """
+
 import yaml
+
 
 def generate_pre_commit_config(ruff_version):
     """
@@ -9,19 +11,11 @@ def generate_pre_commit_config(ruff_version):
     current ruff version.
     """
     config = {
-        'repos': [
+        "repos": [
             {
-                'repo': 'https://github.com/astral-sh/ruff-pre-commit',
-                'rev': f'v{ruff_version}',
-                'hooks': [
-                    {
-                        'id': 'ruff',
-                        'args': ['--fix']
-                    },
-                    {
-                        'id': 'ruff-format'
-                    }
-                ]
+                "repo": "https://github.com/astral-sh/ruff-pre-commit",
+                "rev": f"v{ruff_version}",
+                "hooks": [{"id": "ruff", "args": ["--fix"]}, {"id": "ruff-format"}],
             }
         ]
     }

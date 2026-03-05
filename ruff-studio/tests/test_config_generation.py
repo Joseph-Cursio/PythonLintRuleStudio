@@ -2,6 +2,7 @@ import unittest
 import tomlkit
 from ruff_studio.main import App
 
+
 class TestConfigGeneration(unittest.TestCase):
     def setUp(self):
         # Mock the App class to isolate the get_effective_configs method
@@ -54,6 +55,7 @@ class TestConfigGeneration(unittest.TestCase):
         _, pylint_config = self.app.controller.get_effective_configs()
         self.assertEqual(pylint_config["disable"], ["C0103"])
         self.assertNotIn("enable", pylint_config)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,31 +3,29 @@ import copy
 from unittest.mock import MagicMock
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
-from . import (
-    ruff_adapter, config_manager, ci_integration, profile_manager
-)
+from . import ruff_adapter, config_manager, ci_integration, profile_manager
 from .controller import StudioController
 from .ui.proposal_window import ProposalWindow
-from .ui.dashboard_window import ProposalsDashboard
+from .ui.sidebar import Sidebar
+from .ui.rules_view import RulesView
+from .ui.analytics_window import AnalyticsView
+from .ui.dashboard_window import ProposalsView
 from .ui.comparison_window import ProfileComparisonWindow
-from .ui.analytics_window import AnalyticsWindow
-from .ui.toolbar import Toolbar
-from .ui.rules_panel import RulesPanel
-from .ui.info_panel import InfoPanel
-from .ui.results_panel import ResultsPanel
+
 
 class App(ctk.CTk):
     def __init__(self, headless=False):
         self.controller = StudioController()
+        self.headless = headless
         if not headless:
             super().__init__()
             self.title("Ruff Studio")
-            self.geometry("1280x800")
+            self.geometry("1400x850")
             self._init_ui()
         else:
             self.tk = MagicMock()
 
-        self.rule_widgets = {} # For backward compat in tests if needed
+        self.rule_widgets = {}
         self.selected_rule_frame = None
         self.selected_category_frame = None
 
@@ -37,6 +35,24 @@ class App(ctk.CTk):
             )
             self.process_queue()
 
+    # --- Properties for backward compatibility and convenience ---
+    @property
+    def rules_panel(self):
+        return self.rules_view.rules_panel
+
+    @property
+    def info_panel(self):
+        return self.rules_view.info_panel
+
+    @property
+    def results_panel(self):
+        return self.rules_view.results_panel
+
+    @property
+    def toolbar(self):
+        return self.rules_view.toolbar
+
+    # (Keep existing properties that proxy to controller/toolbar)
     @property
     def analyzer(self):
         return self.controller.analyzer
@@ -97,66 +113,53 @@ class App(ctk.CTk):
     def action_frame(self):
         return self.toolbar.action_frame
 
-    def populate_rules_initial(self):
-        self.rules_panel.populate(self.controller.all_rules.items())
-        self.rule_widgets = self.rules_panel.rule_widgets
-
-    def update_results_panel(self, results):
-        self.results_panel.set_results(results)
-
-    def update_simulation_results_panel(self, results):
-        self.results_panel.set_simulation_results(results)
-
     def run_in_thread(self, worker, command_name, *args):
         self.toolbar.select_button.configure(state="disabled")
         self.toolbar.set_status("Running...")
         self.controller.run_in_thread(worker, command_name, *args)
 
     def _init_ui(self):
-        # Create main layout
-        self.grid_rowconfigure(1, weight=1)
-        self.grid_columnconfigure(0, weight=2)
-        self.grid_columnconfigure(1, weight=0) # Sash
-        self.grid_columnconfigure(2, weight=2)
-        self.grid_columnconfigure(3, weight=0) # Sash
-        self.grid_columnconfigure(4, weight=3)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
-        # --- Toolbar ---
-        self.toolbar = Toolbar(self, self.controller)
-        self.toolbar.grid(
-            row=0, column=0, columnspan=5, sticky="ew", padx=10, pady=10
-        )
+        # --- Main Content Area ---
+        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container.grid(row=0, column=1, sticky="nsew")
+        self.container.grid_columnconfigure(0, weight=1)
+        self.container.grid_rowconfigure(0, weight=1)
 
-        # --- Panels ---
-        self.rules_panel = RulesPanel(self, self.controller)
-        self.rules_panel.grid(row=1, column=0, sticky="nsew", padx=10, pady=0)
+        # Initialize Views
+        self.rules_view = RulesView(self.container, self.controller)
+        self.analytics_view = AnalyticsView(self.container, self.controller)
+        self.proposals_view = ProposalsView(self.container, self.controller)
 
-        self.info_panel = InfoPanel(self, self.controller)
-        self.info_panel.grid(row=1, column=2, sticky="nsew", padx=10, pady=0)
+        self.views = {
+            "rules": self.rules_view,
+            "analytics": self.analytics_view,
+            "proposals": self.proposals_view,
+        }
 
-        self.results_panel = ResultsPanel(self, self.controller)
-        self.results_panel.grid(row=1, column=4, sticky="nsew", padx=0, pady=0)
+        # --- Sidebar ---
+        self.sidebar = Sidebar(self, on_switch_view=self.switch_view)
+        self.sidebar.grid(row=0, column=0, sticky="nsew")
 
-        # For tests compatibility
-        self.results_frame = self.results_panel
-        self.info_frame = self.info_panel
-
-        # --- Sashes for resizing ---
-        self.sash1 = ctk.CTkFrame(self, width=4, cursor="sb_h_double_arrow")
-        self.sash1.grid(row=1, column=1, sticky="ns")
-        self.sash1.bind("<Button-1>", lambda e: self.start_resize(e, 0))
-        self.sash1.bind("<B1-Motion>", self.do_resize)
-
-        self.sash2 = ctk.CTkFrame(self, width=4, cursor="sb_h_double_arrow")
-        self.sash2.grid(row=1, column=3, sticky="ns")
-        self.sash2.bind("<Button-1>", lambda e: self.start_resize(e, 2))
-        self.sash2.bind("<B1-Motion>", self.do_resize)
-
+        # Sashes logic (moved to RulesView but needs methods here)
         self.resize_start_x = 0
         self.resize_start_col = 0
 
         self.bind("<Up>", self.navigate_items)
         self.bind("<Down>", self.navigate_items)
+
+        self.switch_view("rules")
+
+    def switch_view(self, view_name):
+        for name, view in self.views.items():
+            if name == view_name:
+                view.grid(row=0, column=0, sticky="nsew")
+                if hasattr(view, "refresh"):
+                    view.refresh()
+            else:
+                view.grid_forget()
 
     def start_resize(self, event, col):
         self.resize_start_x = event.x_root
@@ -164,20 +167,22 @@ class App(ctk.CTk):
 
     def do_resize(self, event):
         delta = event.x_root - self.resize_start_x
-        weight0 = self.grid_columnconfigure(0)['weight']
-        weight2 = self.grid_columnconfigure(2)['weight']
-        weight4 = self.grid_columnconfigure(4)['weight']
+        # We need to configure the grid of the RulesView, not self
+        rv = self.rules_view
+        weight0 = rv.grid_columnconfigure(0)["weight"]
+        weight2 = rv.grid_columnconfigure(2)["weight"]
+        weight4 = rv.grid_columnconfigure(4)["weight"]
 
         if self.resize_start_col == 0:
             new_weight0 = max(1, weight0 + delta)
             new_weight2 = max(1, weight2 - delta)
-            self.grid_columnconfigure(0, weight=new_weight0)
-            self.grid_columnconfigure(2, weight=new_weight2)
-        else: # col == 2
+            rv.grid_columnconfigure(0, weight=new_weight0)
+            rv.grid_columnconfigure(2, weight=new_weight2)
+        else:  # col == 2
             new_weight2 = max(1, weight2 + delta)
             new_weight4 = max(1, weight4 - delta)
-            self.grid_columnconfigure(2, weight=new_weight2)
-            self.grid_columnconfigure(4, weight=new_weight4)
+            rv.grid_columnconfigure(2, weight=new_weight2)
+            rv.grid_columnconfigure(4, weight=new_weight4)
         self.resize_start_x = event.x_root
 
     def process_queue(self):
@@ -225,6 +230,13 @@ class App(ctk.CTk):
     def update_rules_panel(self):
         self.rules_panel.update_panel()
 
+    def update_results_panel(self, violations):
+        self.results_panel.set_results(violations)
+
+    def populate_rules_initial(self):
+        self.rules_panel.populate(self.controller.all_rules.items())
+        self.rule_widgets = self.rules_panel.rule_widgets
+
     def stage_rule_change(self, rule_code, state):
         self.controller.staged_changes[rule_code] = state
         self.toolbar.simulate_button.configure(state="normal")
@@ -236,9 +248,9 @@ class App(ctk.CTk):
         self.toolbar.simulate_button.configure(state="normal")
         self.toolbar.apply_button.configure(state="normal")
         for category_data in self.controller.all_rules.values():
-            if category_data['prefix'] == prefix:
-                for rule in category_data['rules']:
-                    rc = rule['code']
+            if category_data["prefix"] == prefix:
+                for rule in category_data["rules"]:
+                    rc = rule["code"]
                     if rc in self.controller.staged_changes:
                         del self.controller.staged_changes[rc]
                 break
@@ -274,29 +286,19 @@ class App(ctk.CTk):
             if profile_ruff_config:
                 dummy_ruff_config = {
                     "select": profile_ruff_config.get("select", []),
-                    "ignore": profile_ruff_config.get("ignore", [])
+                    "ignore": profile_ruff_config.get("ignore", []),
                 }
-                profile_ruff_rules = \
-                    self.controller._get_ruff_rules_from_config(dummy_ruff_config)
+                profile_ruff_rules = self.controller._get_ruff_rules_from_config(
+                    dummy_ruff_config
+                )
                 for cat_name, cat_widgets in self.rules_panel.rule_widgets.items():
                     if cat_name.startswith("Pylint:"):
                         continue
-                    for rule_code in cat_widgets['rules'].keys():
+                    for rule_code in cat_widgets["rules"].keys():
                         if rule_code in profile_ruff_rules:
                             self.controller.staged_changes[rule_code] = "select"
                         else:
                             self.controller.staged_changes[rule_code] = "ignore"
-            profile_pylint_config = rules_all.get("pylint", {})
-            if profile_pylint_config:
-                disabled = profile_pylint_config.get("disable", [])
-                for cat_name, cat_widgets in self.rules_panel.rule_widgets.items():
-                    if not cat_name.startswith("Pylint:"):
-                        continue
-                    for rule_code in cat_widgets['rules'].keys():
-                        if rule_code in disabled:
-                            self.controller.staged_changes[rule_code] = "ignore"
-                        else:
-                            self.controller.staged_changes[rule_code] = "default"
             self.update_rules_panel()
             self.toolbar.simulate_button.configure(state="normal")
             self.toolbar.apply_button.configure(state="normal")
@@ -323,12 +325,8 @@ class App(ctk.CTk):
             )
             ProposalWindow(self, config_before, config_after, impact)
             return
-        config_manager.update_ruff_config(
-            self.controller.pyproject_data, ruff_cfg
-        )
-        config_manager.update_pylint_config(
-            self.controller.pyproject_data, pylint_cfg
-        )
+        config_manager.update_ruff_config(self.controller.pyproject_data, ruff_cfg)
+        config_manager.update_pylint_config(self.controller.pyproject_data, pylint_cfg)
         config_manager.write_pyproject(
             self.controller.pyproject_path, self.controller.pyproject_data
         )
@@ -339,17 +337,17 @@ class App(ctk.CTk):
         self.controller.run_in_thread(
             self.controller.run_full_scan_worker,
             "run_full_scan",
-            self.controller.current_directory
+            self.controller.current_directory,
         )
 
     def open_comparison_window(self):
         ProfileComparisonWindow(self)
 
     def open_proposals_dashboard(self):
-        ProposalsDashboard(self)
+        self.switch_view("proposals")
 
-    def open_analytics_window(self):
-        AnalyticsWindow(self, self.controller)
+    def open_analytics(self):
+        self.switch_view("analytics")
 
     def generate_pre_commit_config_file(self):
         try:
@@ -378,17 +376,17 @@ class App(ctk.CTk):
         elif event.keysym == "Down":
             self.controller.navigable_index = min(
                 len(self.controller.navigable_items) - 1,
-                self.controller.navigable_index + 1
+                self.controller.navigable_index + 1,
             )
         item = self.controller.navigable_items[self.controller.navigable_index]
-        if item['type'] == 'rule':
-            self.show_rule_info(item['data'], item['category_name'])
+        if item["type"] == "rule":
+            self.show_rule_info(item["data"], item["category_name"])
         else:
-            self.select_category(item['name'])
+            self.select_category(item["name"])
 
     def select_category(self, category_name):
         for i, item in enumerate(self.controller.navigable_items):
-            if item['type'] == 'category' and item['name'] == category_name:
+            if item["type"] == "category" and item["name"] == category_name:
                 self.controller.selected_item = item
                 self.controller.navigable_index = i
                 break
@@ -397,15 +395,16 @@ class App(ctk.CTk):
         if self.selected_category_frame:
             self.selected_category_frame.configure(fg_color="transparent")
         if category_name in self.rules_panel.rule_widgets:
-            self.selected_category_frame = \
-                self.rules_panel.rule_widgets[category_name]['category_frame']
+            self.selected_category_frame = self.rules_panel.rule_widgets[category_name][
+                "category_frame"
+            ]
             self.selected_category_frame.configure(fg_color="lightblue")
             self.rules_panel.see(self.selected_category_frame)
         self.info_panel.clear()
 
     def show_rule_info(self, rule, category_name=None):
         for i, item in enumerate(self.controller.navigable_items):
-            if item['type'] == 'rule' and item['data'] == rule:
+            if item["type"] == "rule" and item["data"] == rule:
                 self.controller.selected_item = item
                 self.controller.navigable_index = i
                 break
@@ -413,13 +412,15 @@ class App(ctk.CTk):
             self.selected_rule_frame.configure(fg_color="transparent")
         if self.selected_category_frame:
             self.selected_category_frame.configure(fg_color="transparent")
-        rule_code = rule['code']
-        cat_name = category_name or \
-            self.controller.selected_item.get('category_name')
-        if cat_name in self.rules_panel.rule_widgets and \
-           rule_code in self.rules_panel.rule_widgets[cat_name]['rules']:
-            self.selected_rule_frame = \
-                self.rules_panel.rule_widgets[cat_name]['rules'][rule_code]['frame']
+        rule_code = rule["code"]
+        cat_name = category_name or self.controller.selected_item.get("category_name")
+        if (
+            cat_name in self.rules_panel.rule_widgets
+            and rule_code in self.rules_panel.rule_widgets[cat_name]["rules"]
+        ):
+            self.selected_rule_frame = self.rules_panel.rule_widgets[cat_name]["rules"][
+                rule_code
+            ]["frame"]
             self.selected_rule_frame.configure(fg_color="lightblue")
             self.rules_panel.see(self.selected_rule_frame)
         self.info_panel.set_rule(rule)
@@ -430,15 +431,17 @@ class App(ctk.CTk):
 
     def _fetch_docs_worker(self, command, rule):
         try:
-            docs = ruff_adapter.scrape_rule_documentation(rule['code'])
+            docs = ruff_adapter.scrape_rule_documentation(rule["code"])
             self.controller.queue.put((command, (rule, docs)))
         except Exception as e:
             self.controller.queue.put(("error", str(e)))
 
+
 if __name__ == "__main__":
     import sys
+
     app = App()
     if len(sys.argv) > 1:
-        if sys.argv[1] != '--headless':
+        if sys.argv[1] != "--headless":
             app.select_directory(sys.argv[1])
     app.mainloop()

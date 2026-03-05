@@ -3,6 +3,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 from .. import git_adapter, proposal_manager
 
+
 class ProposalWindow(ctk.CTkToplevel):
     def __init__(self, master, config_before, config_after, impact_simulation):
         super().__init__(master)
@@ -16,9 +17,9 @@ class ProposalWindow(ctk.CTkToplevel):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(3, weight=1)
 
-        ctk.CTkLabel(
-            self, text="Proposal Title:", anchor="w"
-        ).grid(row=0, column=0, padx=20, pady=(20, 5), sticky="ew")
+        ctk.CTkLabel(self, text="Proposal Title:", anchor="w").grid(
+            row=0, column=0, padx=20, pady=(20, 5), sticky="ew"
+        )
         self.title_entry = ctk.CTkEntry(
             self, placeholder_text="e.g., Enable Security Rules"
         )
@@ -32,11 +33,10 @@ class ProposalWindow(ctk.CTkToplevel):
 
         self.options_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.options_frame.grid(row=4, column=0, padx=20, pady=10, sticky="ew")
-        
+
         self.push_var = ctk.BooleanVar(value=False)
         self.push_checkbox = ctk.CTkCheckBox(
-            self.options_frame, text="Push branch to origin", 
-            variable=self.push_var
+            self.options_frame, text="Push branch to origin", variable=self.push_var
         )
         self.push_checkbox.pack(side="left")
 
@@ -49,8 +49,9 @@ class ProposalWindow(ctk.CTkToplevel):
         self.create_btn.pack(side="left", padx=5)
 
         self.commit_btn = ctk.CTkButton(
-            self.button_frame, text="Apply & Create Git Branch", 
-            command=self.create_and_commit
+            self.button_frame,
+            text="Apply & Create Git Branch",
+            command=self.create_and_commit,
         )
         self.commit_btn.pack(side="left", padx=5)
 
@@ -73,15 +74,17 @@ class ProposalWindow(ctk.CTkToplevel):
         title, rationale = self._get_data()
         if not title:
             return
-        
+
         proposal_id = proposal_manager.create_proposal(
-            self.master.analyzer.conn, title, rationale,
-            self.config_before, self.config_after, self.impact_simulation
+            self.master.analyzer.conn,
+            title,
+            rationale,
+            self.config_before,
+            self.config_after,
+            self.impact_simulation,
         )
         if proposal_id:
-            messagebox.showinfo(
-                "Success", f"Proposal '{title}' created successfully."
-            )
+            messagebox.showinfo("Success", f"Proposal '{title}' created successfully.")
             self.destroy()
 
     def create_and_commit(self):
@@ -92,31 +95,31 @@ class ProposalWindow(ctk.CTkToplevel):
         repo_path = self.master.controller.current_directory
         if not git_adapter.is_repo_clean(repo_path):
             if not messagebox.askyesno(
-                "Git Dirty", 
-                "Repository has uncommitted changes. Continue anyway?"
+                "Git Dirty", "Repository has uncommitted changes. Continue anyway?"
             ):
                 return
 
         # Generate impact report
         report = proposal_manager.generate_impact_report(
-            self.config_before, self.config_after, 
+            self.config_before,
+            self.config_after,
             self.impact_simulation,
-            base_violations=self.master.controller.base_scan_results
+            base_violations=self.master.controller.base_scan_results,
         )
-        
+
         # Copy to clipboard
         self.clipboard_clear()
         self.clipboard_append(report)
-        
+
         branch_name = f"ruff-studio/proposal-{uuid.uuid4().hex[:8]}"
         if git_adapter.create_branch(repo_path, branch_name):
             # Apply changes to file
             self.master.apply_changes(show_proposal_window=False)
-            
+
             # Commit with report in body
             commit_msg = f"feat: {title}\n\n{rationale}\n\n{report}"
             git_adapter.commit_changes(repo_path, commit_msg)
-            
+
             # Optional push
             push_msg = ""
             if self.push_var.get():
@@ -127,15 +130,19 @@ class ProposalWindow(ctk.CTkToplevel):
 
             # Save proposal to DB
             proposal_manager.create_proposal(
-                self.master.controller.analyzer.conn, title, rationale,
-                self.config_before, self.config_after, 
-                self.impact_simulation, branch_name=branch_name
+                self.master.controller.analyzer.conn,
+                title,
+                rationale,
+                self.config_before,
+                self.config_after,
+                self.impact_simulation,
+                branch_name=branch_name,
             )
-            
+
             messagebox.showinfo(
-                "Success", 
+                "Success",
                 f"Changes applied and committed to branch: {branch_name}"
-                f"\n\nImpact report copied to clipboard.{push_msg}"
+                f"\n\nImpact report copied to clipboard.{push_msg}",
             )
             self.destroy()
         else:
