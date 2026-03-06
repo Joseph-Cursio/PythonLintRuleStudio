@@ -98,12 +98,13 @@ def app():
 
 
 def _get_label_texts(widget):
-    """Return a list of text strings from all CTkLabel children of widget."""
-    return [
-        w.cget("text")
-        for w in widget.winfo_children()
-        if isinstance(w, ctk.CTkLabel)
-    ]
+    """Return a list of text strings from all CTkLabel descendants of widget."""
+    texts = []
+    for w in widget.winfo_children():
+        if isinstance(w, ctk.CTkLabel):
+            texts.append(w.cget("text"))
+        texts.extend(_get_label_texts(w))
+    return texts
 
 
 # ---------------------------------------------------------------------------
