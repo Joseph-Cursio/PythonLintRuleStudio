@@ -26,17 +26,17 @@ class RulesView(ctk.CTkFrame):
 
         # --- Toolbar / content separator ---
         separator = ctk.CTkFrame(self, height=1, fg_color=("gray70", "gray40"))
-        separator.grid(row=1, column=0, columnspan=5, sticky="ew", padx=5)
+        separator.grid(row=1, column=0, columnspan=5, sticky="ew", padx=10)
 
         # --- Panels ---
         self.rules_panel = RulesPanel(self.app, self.controller)
-        self.rules_panel.grid(row=2, column=0, sticky="nsew", padx=10, pady=0)
+        self.rules_panel.grid(row=2, column=0, sticky="nsew", padx=10, pady=(8, 8))
 
         self.info_panel = InfoPanel(self.app, self.controller)
-        self.info_panel.grid(row=2, column=2, sticky="nsew", padx=10, pady=0)
+        self.info_panel.grid(row=2, column=2, sticky="nsew", padx=10, pady=(8, 8))
 
         self.results_panel = ResultsPanel(self.app, self.controller)
-        self.results_panel.grid(row=2, column=4, sticky="nsew", padx=0, pady=0)
+        self.results_panel.grid(row=2, column=4, sticky="nsew", padx=(0, 10), pady=(8, 8))
 
         # --- Sashes for resizing ---
         self.sash1 = ctk.CTkFrame(self, width=4, cursor="sb_h_double_arrow")

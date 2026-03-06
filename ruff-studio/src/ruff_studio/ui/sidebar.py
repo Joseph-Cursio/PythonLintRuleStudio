@@ -48,7 +48,7 @@ class Sidebar(ctk.CTkFrame):
 
         # --- Separator ---
         separator = ctk.CTkFrame(self, height=1, fg_color=("gray70", "gray40"))
-        separator.grid(row=4, column=0, sticky="ew", padx=15, pady=(15, 5))
+        separator.grid(row=4, column=0, sticky="ew", padx=10, pady=(15, 5))
 
         # --- Action buttons ---
         self.compare_profiles_btn = ctk.CTkButton(
