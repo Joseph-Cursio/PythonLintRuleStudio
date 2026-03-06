@@ -82,7 +82,7 @@ class InfoPanel(ctk.CTkScrollableFrame):
         txt = self.docs_textbox
 
         # Configure tags
-        txt.tag_config("header", foreground="#2196f3", font=("", 12, "bold"))
+        txt.tag_config("header", foreground="#2196f3")
         txt.tag_config("keyword", foreground="#ff7b72")  # Reddish
         txt.tag_config("builtin", foreground="#79c0ff")  # Blue
         txt.tag_config("string", foreground="#a5d6ff")  # Light Blue
