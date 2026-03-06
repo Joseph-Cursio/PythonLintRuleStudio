@@ -164,6 +164,16 @@ class RulesPanel(ctk.CTkFrame):
                 row=0, column=3, sticky="w", padx=10
             )
 
+            ctk.CTkLabel(
+                cat_frame,
+                text=str(len(category_data["rules"])),
+                font=("", 10, "bold"),
+                text_color=("gray50", "gray55"),
+                fg_color=("gray80", "gray28"),
+                corner_radius=8,
+                width=32,
+            ).grid(row=0, column=4, padx=(0, 8), pady=4)
+
             # --- Rules Container ---
             rules_container = ctk.CTkFrame(self.scroll_frame, fg_color="transparent")
             rules_container.pack(fill="x", padx=(25, 5))
