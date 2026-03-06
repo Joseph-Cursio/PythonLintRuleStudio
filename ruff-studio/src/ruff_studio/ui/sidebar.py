@@ -15,7 +15,7 @@ class Sidebar(ctk.CTkFrame):
 
         self.rules_btn = ctk.CTkButton(
             self,
-            text="Rules Manager",
+            text="⚙  Rules Manager",
             fg_color="transparent",
             text_color=("gray10", "gray90"),
             hover_color=("gray70", "gray30"),
@@ -26,7 +26,7 @@ class Sidebar(ctk.CTkFrame):
 
         self.analytics_btn = ctk.CTkButton(
             self,
-            text="Analytics",
+            text="📊  Analytics",
             fg_color="transparent",
             text_color=("gray10", "gray90"),
             hover_color=("gray70", "gray30"),
@@ -37,7 +37,7 @@ class Sidebar(ctk.CTkFrame):
 
         self.proposals_btn = ctk.CTkButton(
             self,
-            text="Governance",
+            text="📋  Governance",
             fg_color="transparent",
             text_color=("gray10", "gray90"),
             hover_color=("gray70", "gray30"),
@@ -53,7 +53,7 @@ class Sidebar(ctk.CTkFrame):
         # --- Action buttons ---
         self.compare_profiles_btn = ctk.CTkButton(
             self,
-            text="Compare Profiles",
+            text="⚖  Compare Profiles",
             fg_color="transparent",
             text_color=("gray10", "gray90"),
             hover_color=("gray70", "gray30"),
@@ -64,7 +64,7 @@ class Sidebar(ctk.CTkFrame):
 
         self.generate_pre_commit_button = ctk.CTkButton(
             self,
-            text="Generate Pre-commit",
+            text="🔧  Generate Pre-commit",
             fg_color="transparent",
             text_color=("gray10", "gray90"),
             hover_color=("gray70", "gray30"),

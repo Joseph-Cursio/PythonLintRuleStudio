@@ -24,7 +24,13 @@ class RulesPanel(ctk.CTkFrame):
         self.search_entry.bind("<KeyRelease>", self._on_search_change)
 
         self.clear_search_btn = ctk.CTkButton(
-            self.search_frame, text="X", width=30, command=self.clear_search
+            self.search_frame,
+            text="✕",
+            width=30,
+            fg_color="transparent",
+            text_color=("gray10", "gray90"),
+            hover_color=("gray70", "gray30"),
+            command=self.clear_search,
         )
         self.clear_search_btn.grid(row=0, column=1, padx=(5, 0))
 
@@ -44,7 +50,7 @@ class RulesPanel(ctk.CTkFrame):
             radio_header_frame.grid_columnconfigure(i, minsize=35)
 
         for i, (text, tip) in enumerate(
-            [("Sel", "Select"), ("Ign", "Ignore"), ("Def", "Default")]
+            [("✓", "Select"), ("✗", "Ignore"), ("–", "Default")]
         ):
             lbl = ctk.CTkLabel(radio_header_frame, text=text, anchor="center", width=35)
             lbl.grid(row=0, column=i)
@@ -119,6 +125,8 @@ class RulesPanel(ctk.CTkFrame):
                 cat_frame,
                 text="▼",
                 width=20,
+                fg_color="transparent",
+                hover_color=("gray70", "gray30"),
                 command=lambda cn=category_name: self.master.toggle_category_rules(cn),
             )
             toggle_btn.grid(row=0, column=0, padx=5, pady=2)
