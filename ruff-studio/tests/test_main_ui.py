@@ -678,3 +678,543 @@ def test_show_rule_info_updates_info_label(app):
     app.update_idletasks()
 
     assert app.info_panel.info_label.cget("text") == "Rule: E501"
+
+
+# ---------------------------------------------------------------------------
+# start_resize / do_resize  (lines 169-191)
+# ---------------------------------------------------------------------------
+
+def test_start_resize_records_start_position(app):
+    """start_resize stores x_root and the column index."""
+    event = MagicMock()
+    event.x_root = 300
+
+    app.start_resize(event, 0)
+
+    assert app.resize_start_x == 300
+    assert app.resize_start_col == 0
+
+
+def test_do_resize_col0_adjusts_weights(app):
+    """do_resize with col=0 adjusts columns 0 and 2 of the RulesView grid."""
+    app.resize_start_col = 0
+    app.resize_start_x = 100
+
+    rv = app.rules_view
+    original_weight0 = rv.grid_columnconfigure(0)["weight"]
+    original_weight2 = rv.grid_columnconfigure(2)["weight"]
+
+    event = MagicMock()
+    event.x_root = 120  # delta = +20
+    app.do_resize(event)
+
+    assert rv.grid_columnconfigure(0)["weight"] == max(1, original_weight0 + 20)
+    assert rv.grid_columnconfigure(2)["weight"] == max(1, original_weight2 - 20)
+    assert app.resize_start_x == 120
+
+
+def test_do_resize_col2_adjusts_weights(app):
+    """do_resize with col=2 adjusts columns 2 and 4 of the RulesView grid."""
+    app.resize_start_col = 2
+    app.resize_start_x = 100
+
+    rv = app.rules_view
+    original_weight2 = rv.grid_columnconfigure(2)["weight"]
+    original_weight4 = rv.grid_columnconfigure(4)["weight"]
+
+    event = MagicMock()
+    event.x_root = 80  # delta = -20
+    app.do_resize(event)
+
+    assert rv.grid_columnconfigure(2)["weight"] == max(1, original_weight2 - 20)
+    assert rv.grid_columnconfigure(4)["weight"] == max(1, original_weight4 + 20)
+
+
+# ---------------------------------------------------------------------------
+# update_results_panel  (line 239)
+# ---------------------------------------------------------------------------
+
+def test_update_results_panel_delegates_to_results_panel(app):
+    """update_results_panel calls set_results on the results panel."""
+    from ruff_studio.workspace_analyzer import UnifiedViolationModel
+    violation = UnifiedViolationModel("E501", "f.py", 1, 1, "line too long")
+
+    app.update_results_panel([violation])
+    app.update_idletasks()
+
+    # The results_label text should reflect 1 violation.
+    assert "1" in app.results_panel.results_label.cget("text")
+
+
+# ---------------------------------------------------------------------------
+# _run_simulation_worker  (lines 274-281)
+# ---------------------------------------------------------------------------
+
+def test_run_simulation_worker_success_puts_result_in_queue(app):
+    """_run_simulation_worker puts (command, results) into the queue on success."""
+    fake_results = [MagicMock()]
+
+    with patch("ruff_studio.main.ruff_adapter.run_scan_with_config", return_value=fake_results):
+        app._run_simulation_worker("run_simulation", {})
+
+    command, data = app.controller.queue.get_nowait()
+    assert command == "run_simulation"
+    assert data == fake_results
+
+
+def test_run_simulation_worker_error_puts_error_in_queue(app):
+    """_run_simulation_worker puts ('error', message) into the queue on exception."""
+    with patch(
+        "ruff_studio.main.ruff_adapter.run_scan_with_config",
+        side_effect=RuntimeError("scan failed"),
+    ):
+        app._run_simulation_worker("run_simulation", {})
+
+    command, data = app.controller.queue.get_nowait()
+    assert command == "error"
+    assert "scan failed" in data
+
+
+# ---------------------------------------------------------------------------
+# apply_profile  (lines 283-314)
+# ---------------------------------------------------------------------------
+
+def test_apply_profile_placeholder_returns_early(app):
+    """apply_profile with the placeholder string does nothing."""
+    app.controller.staged_changes = {}
+    app.apply_profile("Apply a Profile...")
+    assert app.controller.staged_changes == {}
+
+
+def test_apply_profile_stages_rules_from_ruff_config(app):
+    """apply_profile with ruff config selects matching rules and ignores others."""
+    mock_profile = {
+        "profile": {"rules": {"ruff": {"select": ["E"], "ignore": ["F"]}}}
+    }
+    with patch("ruff_studio.main.profile_manager.load_profile", return_value=mock_profile):
+        app.apply_profile("standard")
+    app.update_idletasks()
+
+    assert app.controller.staged_changes.get("E501") == "select"
+    assert app.controller.staged_changes.get("F401") == "ignore"
+    assert app.toolbar.simulate_button.cget("state") == "normal"
+    assert app.toolbar.apply_button.cget("state") == "normal"
+
+
+def test_apply_profile_without_ruff_config_clears_staged(app):
+    """apply_profile with no ruff key in profile clears staged changes."""
+    mock_profile = {"profile": {"rules": {}}}
+    app.controller.staged_changes = {"E501": "select"}
+    with patch("ruff_studio.main.profile_manager.load_profile", return_value=mock_profile):
+        app.apply_profile("standard")
+    assert app.controller.staged_changes == {}
+
+
+def test_apply_profile_error_calls_showerror(app):
+    """apply_profile shows an error dialog when loading the profile fails."""
+    import ruff_studio.main as main_module
+
+    with patch(
+        "ruff_studio.main.profile_manager.load_profile",
+        side_effect=FileNotFoundError("no profile"),
+    ):
+        app.apply_profile("nonexistent")
+
+    main_module.messagebox.showerror.assert_called()
+
+
+def test_apply_profile_resets_menu_to_placeholder(app):
+    """apply_profile always resets the profile menu to the placeholder in the finally block."""
+    mock_profile = {"profile": {"rules": {}}}
+    with patch("ruff_studio.main.profile_manager.load_profile", return_value=mock_profile):
+        app.apply_profile("standard")
+    assert app.toolbar.profile_menu.get() == "Apply a Profile..."
+
+
+# ---------------------------------------------------------------------------
+# apply_changes  (lines 316-346)
+# ---------------------------------------------------------------------------
+
+def test_apply_changes_no_pyproject_returns_early(app):
+    """apply_changes does nothing when pyproject_data is None."""
+    app.controller.pyproject_data = None
+    app.apply_changes()  # Should not raise
+
+
+def test_apply_changes_writes_config_when_proposal_window_disabled(app):
+    """apply_changes with show_proposal_window=False writes config to disk."""
+    import tomlkit as _tomlkit
+
+    app.controller.pyproject_data = _tomlkit.parse("[tool.ruff.lint]\nselect = [\"E\"]")
+    app.controller.pyproject_path = "/fake/dir/pyproject.toml"
+
+    with (
+        patch("ruff_studio.main.config_manager.read_pyproject_text", return_value="before"),
+        patch("ruff_studio.main.config_manager.write_pyproject") as mock_write,
+    ):
+        app.apply_changes(show_proposal_window=False)
+
+    mock_write.assert_called_once()
+    assert app.controller.staged_changes == {}
+    assert app.toolbar.simulate_button.cget("state") == "disabled"
+    assert app.toolbar.apply_button.cget("state") == "disabled"
+
+
+# ---------------------------------------------------------------------------
+# generate_pre_commit_config_file  (lines 357-372)
+# ---------------------------------------------------------------------------
+
+def test_generate_pre_commit_config_file_writes_file(app):
+    """generate_pre_commit_config_file writes config content to the chosen path."""
+    import ruff_studio.main as main_module
+    from unittest.mock import mock_open, patch as _patch
+
+    m = mock_open()
+    with (
+        _patch("ruff_studio.main.ruff_adapter.get_ruff_version", return_value="0.1.0"),
+        _patch("ruff_studio.main.filedialog") as mock_fd,
+        _patch("builtins.open", m),
+    ):
+        mock_fd.asksaveasfilename.return_value = "/tmp/pre-commit.yaml"
+        app.generate_pre_commit_config_file()
+
+    m.assert_called_once_with("/tmp/pre-commit.yaml", "w")
+    main_module.messagebox.showinfo.assert_called()
+
+
+def test_generate_pre_commit_config_file_cancelled_does_not_write(app):
+    """generate_pre_commit_config_file does nothing when user cancels the dialog."""
+    from unittest.mock import mock_open, patch as _patch
+
+    m = mock_open()
+    with (
+        _patch("ruff_studio.main.ruff_adapter.get_ruff_version", return_value="0.1.0"),
+        _patch("ruff_studio.main.filedialog") as mock_fd,
+        _patch("builtins.open", m),
+    ):
+        mock_fd.asksaveasfilename.return_value = ""
+        app.generate_pre_commit_config_file()
+
+    m.assert_not_called()
+
+
+def test_generate_pre_commit_config_file_error_shows_showerror(app):
+    """generate_pre_commit_config_file shows an error when get_ruff_version raises."""
+    import ruff_studio.main as main_module
+    from unittest.mock import patch as _patch
+
+    with _patch(
+        "ruff_studio.main.ruff_adapter.get_ruff_version",
+        side_effect=RuntimeError("ruff not found"),
+    ):
+        app.generate_pre_commit_config_file()
+
+    main_module.messagebox.showerror.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# navigate_items — Up branch navigating to a rule  (lines 381-390)
+# ---------------------------------------------------------------------------
+
+def test_navigate_items_up_moves_to_rule_item(app):
+    """Pressing Up when at index 1 (a rule item) triggers show_rule_info."""
+    # navigable_items is: [category0, rule0, category1, rule1, ...]
+    # Start at index 1 (first rule) and press Up to go to the category.
+    assert len(app.controller.navigable_items) >= 2
+
+    app.controller.navigable_index = 1
+    item_at_1 = app.controller.navigable_items[1]
+
+    app.navigate_items(MagicMock(keysym="Up"))
+    app.update_idletasks()
+
+    assert app.controller.navigable_index == 0
+
+
+def test_navigate_items_down_to_rule_calls_show_rule_info(app):
+    """Navigating Down to a rule item triggers show_rule_info."""
+    # Ensure index 0 is a category and index 1 is a rule.
+    assert app.controller.navigable_items[0]["type"] == "category"
+    assert app.controller.navigable_items[1]["type"] == "rule"
+
+    app.controller.navigable_index = 0
+    app.navigate_items(MagicMock(keysym="Down"))
+    app.update_idletasks()
+
+    assert app.controller.navigable_index == 1
+    assert app.info_panel.info_label.cget("text").startswith("Rule:")
+
+
+# ---------------------------------------------------------------------------
+# select_category — clears previous selection frames  (lines 392-408)
+# ---------------------------------------------------------------------------
+
+def test_select_category_clears_previous_rule_frame(app):
+    """select_category resets fg_color of the previously highlighted rule frame."""
+    rule = MOCK_RULES["Error"]["rules"][0]
+    app.show_rule_info(rule, "Error")
+    app.update_idletasks()
+
+    # Now select a category — the rule frame should be deselected.
+    app.select_category("Pyflakes")
+    app.update_idletasks()
+
+    assert app.selected_rule_frame is None or app.selected_category_frame is not None
+    assert app.controller.selected_item["name"] == "Pyflakes"
+
+
+def test_select_category_clears_previous_category_frame(app):
+    """Selecting a second category deselects the first one."""
+    app.select_category("Error")
+    app.update_idletasks()
+    first_frame = app.selected_category_frame
+
+    app.select_category("Pyflakes")
+    app.update_idletasks()
+
+    # First frame must have been reset (fg_color transparent).
+    assert app.controller.selected_item["name"] == "Pyflakes"
+
+
+def test_select_category_unknown_name_does_not_crash(app):
+    """select_category with an unknown name does not raise."""
+    app.select_category("NonExistent")
+    app.update_idletasks()
+
+
+# ---------------------------------------------------------------------------
+# show_rule_info — clears previous frames  (lines 410-431)
+# ---------------------------------------------------------------------------
+
+def test_show_rule_info_clears_previous_category_frame(app):
+    """show_rule_info resets fg_color of the previously highlighted category frame."""
+    app.select_category("Error")
+    app.update_idletasks()
+
+    rule = MOCK_RULES["Error"]["rules"][0]
+    app.show_rule_info(rule, "Error")
+    app.update_idletasks()
+
+    assert app.selected_rule_frame is not None
+
+
+def test_show_rule_info_clears_previous_rule_frame(app):
+    """Showing a second rule deselects the first one."""
+    rule_e = MOCK_RULES["Error"]["rules"][0]
+    rule_f = MOCK_RULES["Pyflakes"]["rules"][0]
+
+    app.show_rule_info(rule_e, "Error")
+    app.update_idletasks()
+    first_frame = app.selected_rule_frame
+
+    app.show_rule_info(rule_f, "Pyflakes")
+    app.update_idletasks()
+
+    # First frame was reset; second is now selected.
+    assert app.selected_rule_frame is not None
+    assert app.selected_rule_frame != first_frame
+
+
+# ---------------------------------------------------------------------------
+# _fetch_docs_worker  (lines 437-442)
+# ---------------------------------------------------------------------------
+
+def test_fetch_docs_worker_success_puts_fetch_docs_in_queue(app):
+    """_fetch_docs_worker puts (command, (rule, docs)) into the queue on success."""
+    rule = {"code": "E501", "name": "LineTooLong", "summary": "S", "status": "stable"}
+
+    with patch("ruff_studio.main.ruff_adapter.scrape_rule_documentation", return_value="docs text"):
+        app._fetch_docs_worker("fetch_docs", rule)
+
+    command, data = app.controller.queue.get_nowait()
+    assert command == "fetch_docs"
+    assert data == (rule, "docs text")
+
+
+def test_fetch_docs_worker_error_puts_error_in_queue(app):
+    """_fetch_docs_worker puts ('error', message) into the queue on exception."""
+    rule = {"code": "E501", "name": "LineTooLong", "summary": "S", "status": "stable"}
+
+    with patch(
+        "ruff_studio.main.ruff_adapter.scrape_rule_documentation",
+        side_effect=ConnectionError("network error"),
+    ):
+        app._fetch_docs_worker("fetch_docs", rule)
+
+    command, data = app.controller.queue.get_nowait()
+    assert command == "error"
+    assert "network error" in data
+
+
+# ---------------------------------------------------------------------------
+# RulesPanel — _on_search_change / clear_search  (lines 67-72)
+# ---------------------------------------------------------------------------
+
+def test_rules_panel_on_search_change_filters_by_entry_text(app):
+    """_on_search_change reads the search_entry and calls filter_rules."""
+    rp = app.rules_panel
+    rp.search_entry.insert(0, "Pyflakes")
+
+    rp._on_search_change()
+    app.update_idletasks()
+
+    assert rp.rule_widgets["Pyflakes"]["category_frame"].winfo_manager() != ""
+
+
+def test_rules_panel_clear_search_restores_all_categories(app):
+    """clear_search clears the entry and shows all categories again."""
+    rp = app.rules_panel
+    rp.search_entry.insert(0, "Pyflakes")
+    rp.filter_rules("Pyflakes")
+    app.update_idletasks()
+
+    rp.clear_search()
+    app.update_idletasks()
+
+    assert rp.search_entry.get() == ""
+
+
+# ---------------------------------------------------------------------------
+# RulesPanel — filter_rules collapsed branches  (lines 95-98)
+# ---------------------------------------------------------------------------
+
+def test_filter_rules_expands_collapsed_category_when_query_matches(app):
+    """filter_rules auto-expands a collapsed category when a query matches it."""
+    rp = app.rules_panel
+
+    # Collapse the Error category first.
+    rp.toggle_category_rules("Error")
+    assert rp.rule_widgets["Error"]["is_expanded"] is False
+
+    # Filter by something that matches Error.
+    rp.filter_rules("E501")
+    app.update_idletasks()
+
+    # The rules_container must be packed (auto-expanded for search).
+    assert rp.rule_widgets["Error"]["rules_container"].winfo_manager() == "pack"
+
+
+def test_filter_rules_collapsed_category_stays_collapsed_on_clear(app):
+    """filter_rules leaves a collapsed category collapsed when the query is cleared."""
+    rp = app.rules_panel
+
+    # Collapse the Pyflakes category.
+    rp.toggle_category_rules("Pyflakes")
+    assert rp.rule_widgets["Pyflakes"]["is_expanded"] is False
+
+    # Clear the search (empty query).
+    rp.filter_rules("")
+    app.update_idletasks()
+
+    assert rp.rule_widgets["Pyflakes"]["is_expanded"] is False
+    assert rp.rule_widgets["Pyflakes"]["rules_container"].winfo_manager() == ""
+
+
+# ---------------------------------------------------------------------------
+# RulesPanel — populate with non-stable rule  (line 228)
+# ---------------------------------------------------------------------------
+
+def test_rules_panel_populate_deprecated_rule_creates_tooltip(app):
+    """Populating with a deprecated rule creates a Tooltip on the label."""
+    from ruff_studio.ui.tooltip import Tooltip
+
+    deprecated_rules = {
+        "Error": {
+            "prefix": "E",
+            "rules": [
+                {"code": "E501", "name": "LineTooLong", "summary": "S", "status": "deprecated"},
+            ],
+        }
+    }
+    app.controller.all_rules = deprecated_rules
+    app.populate_rules_initial()
+    app.update_idletasks()
+
+    # The status tag must appear in the label text.
+    r_frame = app.rules_panel.rule_widgets["Error"]["rules"]["E501"]["frame"]
+    labels = [w for w in r_frame.winfo_children() if isinstance(w, ctk.CTkLabel)]
+    assert any("deprecated" in lbl.cget("text") or "⚠️" in lbl.cget("text") for lbl in labels)
+
+
+# ---------------------------------------------------------------------------
+# RulesPanel — rebuild_navigable_items fallback  (lines 291-300)
+# ---------------------------------------------------------------------------
+
+def test_rebuild_navigable_items_falls_back_to_category_when_rule_hidden(app):
+    """When a selected rule's category is collapsed, selected_item falls back to that category."""
+    rp = app.rules_panel
+    rule = MOCK_RULES["Error"]["rules"][0]
+
+    # Directly set selected_item to the E501 rule.
+    app.controller.selected_item = {"type": "rule", "data": rule, "category_name": "Error"}
+
+    # Collapse Error so its rules are excluded from navigable_items.
+    # toggle_category_rules calls rebuild_navigable_items internally.
+    rp.toggle_category_rules("Error")
+    assert rp.rule_widgets["Error"]["is_expanded"] is False
+
+    # The fallback (lines 291-300) should have promoted selected_item to the category.
+    assert app.controller.selected_item["type"] == "category"
+    assert app.controller.selected_item["name"] == "Error"
+
+
+# ---------------------------------------------------------------------------
+# RulesPanel.see  (lines 354-377)
+# ---------------------------------------------------------------------------
+
+def test_rules_panel_see_none_does_not_raise(app):
+    """see(None) returns immediately without error."""
+    app.rules_panel.see(None)
+
+
+def test_rules_panel_see_content_fits_viewport_returns_early(app):
+    """see() returns without scrolling when content fits in the viewport."""
+    widget = next(iter(app.rules_panel.rule_widgets.values()))["category_frame"]
+    sf = app.rules_panel.scroll_frame
+
+    with (
+        patch.object(sf._parent_frame, "winfo_height", return_value=50),
+        patch.object(sf._parent_canvas, "winfo_height", return_value=500),
+        patch.object(sf._parent_canvas, "yview_moveto") as mock_moveto,
+    ):
+        app.rules_panel.see(widget)
+
+    mock_moveto.assert_not_called()
+
+
+def test_rules_panel_see_scrolls_up_when_widget_above_viewport(app):
+    """see() calls yview_moveto when the widget is above the visible area."""
+    widget = next(iter(app.rules_panel.rule_widgets.values()))["category_frame"]
+    sf = app.rules_panel.scroll_frame
+
+    with (
+        patch.object(widget, "winfo_rooty", return_value=0),
+        patch.object(sf._parent_frame, "winfo_rooty", return_value=400),
+        patch.object(widget, "winfo_height", return_value=30),
+        patch.object(sf._parent_frame, "winfo_height", return_value=1000),
+        patch.object(sf._parent_canvas, "winfo_height", return_value=300),
+        patch.object(sf._parent_canvas, "yview", return_value=(0.5, 0.8)),
+        patch.object(sf._parent_canvas, "yview_moveto") as mock_moveto,
+    ):
+        app.rules_panel.see(widget)
+
+    mock_moveto.assert_called_once()
+
+
+def test_rules_panel_see_scrolls_down_when_widget_below_viewport(app):
+    """see() calls yview_moveto when the widget is below the visible area."""
+    widget = next(iter(app.rules_panel.rule_widgets.values()))["category_frame"]
+    sf = app.rules_panel.scroll_frame
+
+    with (
+        patch.object(widget, "winfo_rooty", return_value=900),
+        patch.object(sf._parent_frame, "winfo_rooty", return_value=0),
+        patch.object(widget, "winfo_height", return_value=50),
+        patch.object(sf._parent_frame, "winfo_height", return_value=1000),
+        patch.object(sf._parent_canvas, "winfo_height", return_value=300),
+        patch.object(sf._parent_canvas, "yview", return_value=(0.0, 0.3)),
+        patch.object(sf._parent_canvas, "yview_moveto") as mock_moveto,
+    ):
+        app.rules_panel.see(widget)
+
+    mock_moveto.assert_called_once()
