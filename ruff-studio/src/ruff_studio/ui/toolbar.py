@@ -43,33 +43,6 @@ class Toolbar(ctk.CTkFrame):
         self.profile_menu.set("Apply a Profile...")
         self.profile_menu.configure(state="disabled")
 
-        self.compare_profiles_button = ctk.CTkButton(
-            self.action_frame,
-            text="Compare Profiles",
-            command=master.open_comparison_window,
-        )
-        self.compare_profiles_button.pack(side="left", padx=5)
-
-        self.proposals_button = ctk.CTkButton(
-            self.action_frame,
-            text="Proposals Dashboard",
-            command=master.open_proposals_dashboard,
-        )
-        self.proposals_button.pack(side="left", padx=5)
-
-        self.analytics_button = ctk.CTkButton(
-            self.action_frame, text="Analytics", command=master.open_analytics
-        )
-        self.analytics_button.pack(side="left", padx=5)
-
-        self.generate_pre_commit_button = ctk.CTkButton(
-            self.action_frame,
-            text="Generate Pre-commit Config",
-            command=master.generate_pre_commit_config_file,
-            state="disabled",
-        )
-        self.generate_pre_commit_button.pack(side="left", padx=5)
-
         self.status_label = ctk.CTkLabel(self, text="")
         self.status_label.pack(side="right", padx=10)
 

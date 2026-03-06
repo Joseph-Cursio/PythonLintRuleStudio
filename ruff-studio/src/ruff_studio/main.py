@@ -91,7 +91,7 @@ class App(ctk.CTk):
 
     @property
     def generate_pre_commit_button(self):
-        return self.toolbar.generate_pre_commit_button
+        return self.sidebar.generate_pre_commit_button
 
     @property
     def status_label(self):
@@ -140,7 +140,12 @@ class App(ctk.CTk):
         }
 
         # --- Sidebar ---
-        self.sidebar = Sidebar(self, on_switch_view=self.switch_view)
+        self.sidebar = Sidebar(
+            self,
+            on_switch_view=self.switch_view,
+            on_compare_profiles=self.open_comparison_window,
+            on_generate_pre_commit=self.generate_pre_commit_config_file,
+        )
         self.sidebar.grid(row=0, column=0, sticky="nsew")
 
         # Sashes logic (moved to RulesView but needs methods here)
@@ -225,7 +230,7 @@ class App(ctk.CTk):
             )
             self.update_rules_panel()
             self.toolbar.profile_menu.configure(state="normal")
-            self.toolbar.generate_pre_commit_button.configure(state="normal")
+            self.sidebar.generate_pre_commit_button.configure(state="normal")
 
     def update_rules_panel(self):
         self.rules_panel.update_panel()

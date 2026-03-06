@@ -9,8 +9,24 @@ class InfoPanel(ctk.CTkScrollableFrame):
 
         self.info_label = ctk.CTkLabel(self, text="Rule Info", font=("", 16, "bold"))
         self.info_label.pack(pady=10)
+        self._dynamic_labels = []
+        self.bind("<Configure>", self._on_resize)
+
+    def _on_resize(self, event):
+        new_wrap = max(100, event.width - 30)
+        for lbl in self._dynamic_labels:
+            try:
+                lbl.configure(wraplength=new_wrap)
+            except Exception:
+                pass
+
+    def _wrap(self):
+        """Current wraplength based on panel width, with a safe fallback."""
+        w = self.winfo_width()
+        return max(100, w - 30) if w > 1 else 250
 
     def clear(self):
+        self._dynamic_labels = []
         for widget in self.winfo_children():
             if widget != self.info_label:
                 widget.destroy()
@@ -20,21 +36,27 @@ class InfoPanel(ctk.CTkScrollableFrame):
         self._parent_canvas.yview_moveto(0)
         self.info_label.configure(text=f"Rule: {rule['code']}")
 
-        ctk.CTkLabel(self, text=f"Name: {rule['name']}", wraplength=250).pack(
-            pady=5, anchor="w"
-        )
+        wrap = self._wrap()
+
+        name_lbl = ctk.CTkLabel(self, text=f"Name: {rule['name']}", wraplength=wrap, anchor="w")
+        name_lbl.pack(pady=5, anchor="w")
+        self._dynamic_labels.append(name_lbl)
 
         source = "Pylint" if self.controller.is_pylint_rule(rule["code"]) else "Ruff"
-        ctk.CTkLabel(
+        source_lbl = ctk.CTkLabel(
             self,
             text=f"Source: {source} Linter",
-            wraplength=250,
+            wraplength=wrap,
             font=("", 12, "italic"),
-        ).pack(pady=5, anchor="w")
+        )
+        source_lbl.pack(pady=5, anchor="w")
+        self._dynamic_labels.append(source_lbl)
 
-        ctk.CTkLabel(
-            self, text=f"Summary: {rule['summary']}", wraplength=250, justify="left"
-        ).pack(pady=5, anchor="w")
+        summary_lbl = ctk.CTkLabel(
+            self, text=f"Summary: {rule['summary']}", wraplength=wrap, justify="left"
+        )
+        summary_lbl.pack(pady=5, anchor="w")
+        self._dynamic_labels.append(summary_lbl)
 
         self._init_doc_viewer(rule)
 

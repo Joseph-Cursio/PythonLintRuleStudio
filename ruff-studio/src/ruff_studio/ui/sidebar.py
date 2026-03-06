@@ -2,11 +2,11 @@ import customtkinter as ctk
 
 
 class Sidebar(ctk.CTkFrame):
-    def __init__(self, master, on_switch_view, **kwargs):
+    def __init__(self, master, on_switch_view, on_compare_profiles=None, on_generate_pre_commit=None, **kwargs):
         super().__init__(master, width=200, corner_radius=0, **kwargs)
         self.on_switch_view = on_switch_view
 
-        self.grid_rowconfigure(4, weight=1)  # Spacing at the bottom
+        self.grid_rowconfigure(5, weight=1)  # Spacing between nav and actions
 
         self.logo_label = ctk.CTkLabel(
             self, text="Ruff Studio", font=ctk.CTkFont(size=20, weight="bold")
@@ -45,6 +45,34 @@ class Sidebar(ctk.CTkFrame):
             command=lambda: self._select_view("proposals"),
         )
         self.proposals_btn.grid(row=3, column=0, sticky="ew", padx=10, pady=5)
+
+        # --- Separator ---
+        separator = ctk.CTkFrame(self, height=1, fg_color=("gray70", "gray40"))
+        separator.grid(row=4, column=0, sticky="ew", padx=15, pady=(15, 5))
+
+        # --- Action buttons ---
+        self.compare_profiles_btn = ctk.CTkButton(
+            self,
+            text="Compare Profiles",
+            fg_color="transparent",
+            text_color=("gray10", "gray90"),
+            hover_color=("gray70", "gray30"),
+            anchor="w",
+            command=on_compare_profiles,
+        )
+        self.compare_profiles_btn.grid(row=6, column=0, sticky="ew", padx=10, pady=5)
+
+        self.generate_pre_commit_button = ctk.CTkButton(
+            self,
+            text="Generate Pre-commit",
+            fg_color="transparent",
+            text_color=("gray10", "gray90"),
+            hover_color=("gray70", "gray30"),
+            anchor="w",
+            state="disabled",
+            command=on_generate_pre_commit,
+        )
+        self.generate_pre_commit_button.grid(row=7, column=0, sticky="ew", padx=10, pady=5)
 
         # Initial selection
         self._select_view("rules")
